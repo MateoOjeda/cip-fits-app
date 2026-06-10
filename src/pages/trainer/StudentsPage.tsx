@@ -1,127 +1,71 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import {
-  fetchLinkedStudents as fetchLinkedStudentsService,
-  fetchAvailableStudents as fetchAvailableStudentsService,
-  linkStudent as linkStudentService,
-  unlinkStudent as unlinkStudentService,
-  deleteStudentPermanently,
-  updatePaymentStatus,
-  createStudentProfile,
-  type LinkedStudent,
-  type AvailableStudent,
-} from "@/services/alumnos";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { useStudentsManager } from "@/hooks/useStudentsManager";
+import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { 
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger 
-} from "@/components/ui/dialog";
-import { Input as UiInput } from "@/components/ui/input";
-import { Users, Loader2, Trash2, Dumbbell, Apple, Eye, Pencil, Plus, UserMinus } from "lucide-react";
-import { toast } from "sonner";
-import { StudentCard } from "@/components/trainer/StudentCard";
+import { Loader2 } from "lucide-react";
+import type { LinkedStudent } from "@/services/alumnos";
 
-const PLAN_LEVEL_OPTIONS = [
-  { value: "inicial", label: "Inicial", color: "text-green-600 border-green-400/50 bg-green-500/10" },
-  { value: "intermedio", label: "Intermedio", color: "text-orange-600 border-orange-400/50 bg-orange-500/10" },
-  { value: "avanzado", label: "Avanzado", color: "text-red-600 border-red-400/50 bg-red-500/10" },
-];
-
-const getLevelColor = (level: string) =>
-  PLAN_LEVEL_OPTIONS.find((o) => o.value === level)?.color || "";
+import { StudentsList } from "@/components/trainer/students/StudentsList";
+import { AvailableStudentsList } from "@/components/trainer/students/AvailableStudentsList";
+import { StudentDetailPanel } from "@/components/trainer/students/StudentDetailPanel";
+import { CreateStudentDialog } from "@/components/trainer/students/CreateStudentDialog";
 
 export default function StudentsPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [linkedStudents, setLinkedStudents] = useState<LinkedStudent[]>([]);
-  const [availableStudents, setAvailableStudents] = useState<AvailableStudent[]>([]);
-  const [linking, setLinking] = useState<string | null>(null);
-  const [unlinking, setUnlinking] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingAvailable, setLoadingAvailable] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<LinkedStudent | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const {
+    linkedStudents,
+    isLoadingLinked,
+    availableStudents,
+    isLoadingAvailable,
+    linkStudent,
+    unlinkStudent,
+    deleteStudent,
+    isDeleting,
+    createStudentProfile,
+    isCreatingProfile
+  } = useStudentsManager();
+
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  
+  // States for Modals/Dialogs
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newStudentData, setNewStudentData] = useState({ name: "", weight: "", age: "" });
-  const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<LinkedStudent | null>(null);
+  const [unlinkingTargetId, setUnlinkingTargetId] = useState<string | null>(null);
+  const [linkingTargetId, setLinkingTargetId] = useState<string | null>(null);
 
-  const refreshAll = useCallback(async () => {
-    if (!user) return;
-    const [linked, available] = await Promise.all([
-      fetchLinkedStudentsService(user.uid),
-      fetchAvailableStudentsService(user.uid),
-    ]);
-    setLinkedStudents(linked);
-    setAvailableStudents(available);
-    setLoading(false);
-    setLoadingAvailable(false);
-  }, [user]);
-
-  useEffect(() => { refreshAll(); }, [refreshAll]);
-
+  // Handlers
   const handleLink = async (studentId: string) => {
-    if (!user) return;
-    setLinking(studentId);
+    setLinkingTargetId(studentId);
     try {
-      await linkStudentService(user.uid, studentId);
+      await linkStudent(studentId);
       toast.success("Alumno vinculado correctamente");
-      await refreshAll();
-    } catch { toast.error("Error al vincular alumno"); }
-    setLinking(null);
-  };
-
-  const handleUnlink = async (student: LinkedStudent) => {
-    if (!user) return;
-    setUnlinking(student.user_id);
-    try {
-      await unlinkStudentService(user.uid, student.user_id);
-      toast.success("Alumno removido correctamente");
-      if (selectedStudentId === student.user_id) setSelectedStudentId(null);
-      await refreshAll();
-    } catch { toast.error("Error al remover alumno"); }
-    setUnlinking(null);
-  };
-
-  const handlePaymentToggle = async (student: LinkedStudent, checked: boolean) => {
-    const newStatus = checked ? "pagado" : "pendiente";
-    setLinkedStudents((prev) => prev.map((s) => s.user_id === student.user_id ? { ...s, paymentStatus: newStatus } : s));
-    try {
-      await updatePaymentStatus(student.linkId, newStatus as "pagado" | "pendiente");
     } catch {
-      toast.error("Error al actualizar pago");
-      setLinkedStudents((prev) => prev.map((s) => s.user_id === student.user_id ? { ...s, paymentStatus: checked ? "pendiente" : "pagado" } : s));
+      toast.error("Error al vincular alumno");
+    } finally {
+      setLinkingTargetId(null);
     }
   };
 
-  const confirmDeleteStudent = async () => {
-    if (!user || !deleteTarget) return;
-    setDeleting(true);
+  const handleUnlink = async (student: LinkedStudent) => {
+    setUnlinkingTargetId(student.user_id);
     try {
-      await deleteStudentPermanently(user.uid, deleteTarget.user_id);
-      toast.success("Alumno eliminado permanentemente");
-      if (selectedStudentId === deleteTarget.user_id) setSelectedStudentId(null);
-      await refreshAll();
-    } catch { toast.error("Error al eliminar alumno"); }
-    setDeleting(false);
-    setDeleteTarget(null);
+      await unlinkStudent(student.user_id);
+      toast.success("Alumno removido correctamente");
+      if (selectedStudentId === student.user_id) setSelectedStudentId(null);
+    } catch {
+      toast.error("Error al remover alumno");
+    } finally {
+      setUnlinkingTargetId(null);
+    }
   };
 
   const handleCreateStudent = async () => {
-    if (!user || !newStudentData.name.trim()) return;
-    setCreating(true);
     try {
-      await createStudentProfile(user.uid, {
+      await createStudentProfile({
         name: newStudentData.name.trim(),
         weight: newStudentData.weight ? parseFloat(newStudentData.weight) : undefined,
         age: newStudentData.age ? parseInt(newStudentData.age) : undefined,
@@ -129,278 +73,86 @@ export default function StudentsPage() {
       toast.success("Alumno creado y vinculado correctamente");
       setShowCreateDialog(false);
       setNewStudentData({ name: "", weight: "", age: "" });
-      await refreshAll();
     } catch {
       toast.error("Error al crear alumno");
+    }
+  };
+
+  const confirmDeleteStudent = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteStudent(deleteTarget.user_id);
+      toast.success("Alumno eliminado permanentemente");
+      if (selectedStudentId === deleteTarget.user_id) setSelectedStudentId(null);
+    } catch {
+      toast.error("Error al eliminar alumno");
     } finally {
-      setCreating(false);
+      setDeleteTarget(null);
     }
   };
 
   const selectedStudent = linkedStudents.find((s) => s.user_id === selectedStudentId) || null;
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
+
   return (
-    <div className="container-responsive space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Panel del Entrenador</h1>
-        <p className="text-muted-foreground text-sm">Gestiona y supervisa a tus alumnos de forma eficiente</p>
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="container-responsive space-y-6 pb-20"
+    >
+      <div className="flex flex-col gap-1 relative z-10">
+        <motion.h1 
+          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+          className="text-3xl font-display font-bold tracking-tight text-primary uppercase drop-shadow-md"
+        >
+          Panel del Entrenador
+        </motion.h1>
+        <motion.p 
+          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+          className="text-muted-foreground text-sm"
+        >
+          Gestiona y supervisa a tus alumnos de forma eficiente
+        </motion.p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6 min-h-[70vh]">
-        {/* LEFT COLUMN */}
-        <div className="flex flex-col gap-6">
-          {/* Linked students */}
-          <Card className="card-premium overflow-hidden border-accent/20">
-            <CardHeader className="p-5 pb-3 bg-accent/5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-accent/10 rounded-lg text-accent">
-                  <Users className="h-5 w-5" />
-                </div>
-                <CardTitle className="text-base text-accent">Alumnos vinculados ({linkedStudents.length})</CardTitle>
-              </div>
-              <Button size="sm" variant="ghost" className="h-8 px-2 text-accent hover:bg-accent/10" onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Nuevo
-              </Button>
-            </CardHeader>
-            <CardContent className="p-3 overflow-y-auto max-h-[45vh] hide-scrollbar">
-              {loading ? (
-                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-accent" /></div>
-              ) : linkedStudents.length === 0 ? (
-                <div className="text-center py-6">
-                  <Users className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-xs text-muted-foreground">Sin alumnos vinculados</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {linkedStudents.map((student) => (
-                    <StudentCard
-                      key={student.user_id}
-                      name={student.display_name}
-                      avatarUrl={student.avatar_url}
-                      avatarInitials={student.avatar_initials}
-                      active={selectedStudentId === student.user_id}
-                      onClick={() => setSelectedStudentId(student.user_id)}
-                      size="sm"
-                      subtitle={
-                        <>
-                          <Badge variant="outline" className={cn(
-                            "border-none shadow-sm shadow-black/20 text-[9px] px-1.5 h-4",
-                            student.paymentStatus === "pagado" ? "badge-status-pagado" : "badge-status-pendiente"
-                          )}>
-                            {student.paymentStatus === "pagado" ? "✓" : "⏳"} {student.paymentStatus === "pagado" ? "Pagado" : "Pendiente"}
-                          </Badge>
-                          {student.groupName && (
-                            <Badge className="badge-info-tag border-none shadow-sm shadow-black/20 text-[9px] px-1.5 h-4">
-                              {student.groupName}
-                            </Badge>
-                          )}
-                        </>
-                      }
-                      rightContent={
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors group/btn"
-                          onClick={() => handleUnlink(student)}
-                          disabled={unlinking === student.user_id}
-                          title="Remover alumno"
-                        >
-                          {unlinking === student.user_id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <UserMinus className="h-4 w-4 group-hover/btn:scale-110 transition-transform" />
-                          )}
-                        </Button>
-                      }
-                      className="mb-1"
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 min-h-[70vh] relative z-10">
+        
+        {/* LEFT COLUMN: Lists */}
+        <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-col gap-6">
+          <StudentsList
+            students={linkedStudents}
+            isLoading={isLoadingLinked}
+            selectedStudentId={selectedStudentId}
+            onSelect={setSelectedStudentId}
+            onUnlink={handleUnlink}
+            unlinkingId={unlinkingTargetId}
+            onCreateClick={() => setShowCreateDialog(true)}
+            itemVariants={itemVariants}
+          />
 
-          {/* Available students */}
-          <Card className="card-premium overflow-hidden border-blue-400/20">
-            <CardHeader className="p-5 pb-3 bg-blue-500/5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-                  <Users className="h-5 w-5" />
-                </div>
-                <CardTitle className="text-base text-blue-500">Alumnos disponibles ({availableStudents.length})</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 overflow-y-auto max-h-[40vh] hide-scrollbar">
-              {loadingAvailable ? (
-                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>
-              ) : availableStudents.length === 0 ? (
-                <div className="text-center py-6">
-                  <Users className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-xs text-muted-foreground">No hay alumnos disponibles</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {availableStudents.map((student) => (
-                    <StudentCard
-                      key={student.user_id}
-                      name={student.display_name}
-                      avatarUrl={student.avatar_url}
-                      avatarInitials={student.avatar_initials}
-                      size="sm"
-                      rightContent={
-                        <Button
-                          size="sm" variant="outline"
-                          className="gap-1 border-blue-400/30 text-blue-500 hover:bg-blue-500/10 flex-shrink-0 h-8 px-3 rounded-lg"
-                          disabled={linking === student.user_id}
-                          onClick={() => handleLink(student.user_id)}
-                        >
-                          {linking === student.user_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                          Agregar
-                        </Button>
-                      }
-                      className="mb-1"
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+          <AvailableStudentsList
+            students={availableStudents}
+            isLoading={isLoadingAvailable}
+            onLink={handleLink}
+            linkingId={linkingTargetId}
+            itemVariants={itemVariants}
+          />
+        </motion.div>
 
-        {/* RIGHT COLUMN */}
-        <Card className="card-premium overflow-hidden border-primary/10">
-          {!selectedStudent ? (
-            <CardContent className="flex flex-col items-center justify-center h-full min-h-[400px] text-center p-8">
-              <Users className="h-12 w-12 text-muted-foreground/40 mb-3" />
-              <p className="text-muted-foreground text-sm">Seleccioná un alumno de la lista para ver su información</p>
-            </CardContent>
-          ) : (
-            <CardContent className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
-              {/* Profile header */}
-              <div className="flex items-center gap-4">
-                <div 
-                  className="cursor-pointer transition-opacity hover:opacity-80"
-                  onClick={() => navigate(`/trainer/students/${selectedStudent.user_id}`)}
-                >
-                  <Avatar className="h-20 w-20 border-2 border-accent/30">
-                    <AvatarImage src={selectedStudent.avatar_url || undefined} />
-                    <AvatarFallback className="bg-accent/10 text-accent font-bold text-2xl">
-                      {selectedStudent.avatar_initials || (selectedStudent.display_name || "??").slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-                <div className="flex-1">
-                  <h2 
-                    className="text-xl font-display font-bold neon-text cursor-pointer hover:opacity-80 transition-opacity inline-block"
-                    onClick={() => navigate(`/trainer/students/${selectedStudent.user_id}`)}
-                  >
-                    {selectedStudent.display_name}
-                  </h2>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <Badge variant="outline" className={`text-xs ${selectedStudent.paymentStatus === "pagado" ? "border-green-400/50 text-green-600" : "border-orange-400/50 text-orange-600"}`}>
-                      {selectedStudent.paymentStatus === "pagado" ? "✓ Pagado" : "⏳ No pagado"}
-                    </Badge>
-                    {selectedStudent.groupName && (
-                      <Badge className="badge-info-tag px-3 py-1 text-[11px] border-none shadow-md shadow-primary/10">
-                        Grupo: {selectedStudent.groupName}
-                      </Badge>
-                    )}
-                    {(selectedStudent.age || selectedStudent.weight) && (
-                      <div className="flex items-center gap-2 ml-1">
-                        {selectedStudent.age && (
-                          <Badge variant="secondary" className="bg-muted/50 text-muted-foreground text-[10px] font-bold px-2 py-0.5">
-                            {selectedStudent.age} años
-                          </Badge>
-                        )}
-                        {selectedStudent.weight && (
-                          <Badge variant="secondary" className="bg-muted/50 text-muted-foreground text-[10px] font-bold px-2 py-0.5">
-                            {selectedStudent.weight}kg
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost" size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive self-start"
-                  onClick={() => setDeleteTarget(selectedStudent)}
-                  title="Eliminar alumno"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+        {/* RIGHT COLUMN: Details */}
+        <StudentDetailPanel 
+          student={selectedStudent} 
+          onDeleteClick={setDeleteTarget} 
+        />
 
-              {/* Plan selectors */}
-              {(!selectedStudent.planEntrenamiento || selectedStudent.planEntrenamiento === "none") && (!selectedStudent.planAlimentacion || selectedStudent.planAlimentacion === "none") ? (
-                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
-                  <p className="text-sm font-semibold text-destructive">Este alumno no tiene planes asociados</p>
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Asignación de planes</h3>
-                  </div>
-
-                  <div className="space-y-3">
-                    {selectedStudent.planEntrenamiento && selectedStudent.planEntrenamiento !== "none" && (
-                      <div className="flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 text-accent" />
-                        <Label className="text-sm font-medium">Entrenamiento</Label>
-                        <Badge variant="outline" className={`text-[10px] ml-auto ${getLevelColor(selectedStudent.planEntrenamiento)}`}>
-                          {PLAN_LEVEL_OPTIONS.find(o => o.value === selectedStudent.planEntrenamiento)?.label || selectedStudent.planEntrenamiento}
-                        </Badge>
-                      </div>
-                    )}
-
-                    {selectedStudent.planAlimentacion && selectedStudent.planAlimentacion !== "none" && (
-                      <div className="flex items-center gap-2">
-                        <Apple className="h-4 w-4 text-accent" />
-                        <Label className="text-sm font-medium">Alimentación</Label>
-                        <Badge variant="outline" className={`text-[10px] ml-auto ${getLevelColor(selectedStudent.planAlimentacion)}`}>
-                          {PLAN_LEVEL_OPTIONS.find(o => o.value === selectedStudent.planAlimentacion)?.label || selectedStudent.planAlimentacion}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Routine section */}
-              <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-3">
-                <div className="flex items-center gap-2">
-                  <Dumbbell className="h-5 w-5 text-accent" />
-                  <h3 className="font-semibold text-sm">Rutina de entrenamiento</h3>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" size="sm" className="btn-premium-outline flex-1 h-10 text-xs px-0 border-primary/20" onClick={() => navigate(`/trainer/students/${selectedStudent.user_id}`)}>
-                    <Eye className="h-4 w-4 mr-2" /> Ver detalle
-                  </Button>
-                  <Button size="sm" className="btn-premium-primary flex-1 h-10 text-xs px-0" onClick={() => navigate(`/trainer/routines/${selectedStudent.user_id}`)}>
-                    <Pencil className="h-4 w-4 mr-2" /> Editar rutina
-                  </Button>
-                </div>
-              </div>
-
-              {/* Meals routine section */}
-              <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-3 mt-3">
-                <div className="flex items-center gap-2">
-                  <Apple className="h-5 w-5 text-accent" />
-                  <h3 className="font-semibold text-sm">Rutina de Alimentación</h3>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" size="sm" className="btn-premium-outline flex-1 h-10 text-xs px-0 border-primary/20" onClick={() => navigate(`/trainer/students/${selectedStudent.user_id}`)}>
-                    <Eye className="h-4 w-4 mr-2" /> Ver detalle
-                  </Button>
-                  <Button size="sm" className="btn-premium-primary flex-1 h-10 text-xs px-0" onClick={() => navigate(`/trainer/students/${selectedStudent.user_id}`)}>
-                    <Pencil className="h-4 w-4 mr-2" /> Editar
-                  </Button>
-                </div>
-              </div>
-
-              {/* Bottom grid removed to relocate info to header */}
-            </CardContent>
-          )}
-        </Card>
       </div>
 
       {/* Delete confirmation */}
@@ -415,13 +167,13 @@ export default function StudentsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteStudent}
-              disabled={deleting}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sí, eliminar permanentemente
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -429,58 +181,15 @@ export default function StudentsPage() {
       </AlertDialog>
 
       {/* Create Student Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Registrar Nuevo Alumno</DialogTitle>
-            <DialogDescription>
-              Crea un perfil para un alumno que aún no se ha registrado en la plataforma.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Nombre Completo</Label>
-              <UiInput
-                id="name"
-                placeholder="Ej: Juan Pérez"
-                value={newStudentData.name}
-                onChange={(e) => setNewStudentData({ ...newStudentData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="age">Edad (Opcional)</Label>
-                <UiInput
-                  id="age"
-                  type="number"
-                  placeholder="25"
-                  value={newStudentData.age}
-                  onChange={(e) => setNewStudentData({ ...newStudentData, age: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="weight">Peso kg (Opcional)</Label>
-                <UiInput
-                  id="weight"
-                  type="number"
-                  placeholder="75.5"
-                  value={newStudentData.weight}
-                  onChange={(e) => setNewStudentData({ ...newStudentData, weight: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={creating}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateStudent} disabled={creating || !newStudentData.name.trim()}>
-              {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-              Crear Alumno
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      <CreateStudentDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        newStudentData={newStudentData}
+        setNewStudentData={setNewStudentData}
+        onCreate={handleCreateStudent}
+        isCreating={isCreatingProfile}
+      />
+
+    </motion.div>
   );
 }

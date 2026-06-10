@@ -4,15 +4,15 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useLinkedStudents } from "@/hooks/useLinkedStudents";
 import { db } from "@/lib/firebase";
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  addDoc, 
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  addDoc,
   deleteDoc,
   setDoc,
   writeBatch
@@ -32,6 +32,7 @@ import {
   type Exercise,
   type DayConfig,
   type ExerciseType,
+  autoUpdateRoutineCycle,
 } from "@/services/rutinas";
 import { getOrCreateActiveRoutine, linkExercisesToRoutine } from "@/services/routineManager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,7 +63,7 @@ export default function RoutinesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const activeTab = searchParams.get("tab") || "entrenamiento";
-  
+
   const isGroupMode = !!urlGroupId;
   const { students, loading: loadingStudents } = useLinkedStudents();
   const [groupName, setGroupName] = useState<string>("");
@@ -113,9 +114,9 @@ export default function RoutinesPage() {
       // Group mode: fetch group_exercises
       setLoadingExercises(true);
       try {
-        const qEx = query(collection(db, "group_exercises"), where("group_id", "==", urlGroupId), where("trainer_id", "==", user.uid));
-        const qDay = query(collection(db, "routine_day_config"), where("trainer_id", "==", user.uid), where("student_id", "==", urlGroupId));
-        
+        const qEx = query(collection(db, "group_exercises"), where("group_id", "==", urlGroupId));
+        const qDay = query(collection(db, "routine_day_config"), where("student_id", "==", urlGroupId));
+
         const [exSnap, daySnap] = await Promise.all([
           getDocs(qEx),
           getDocs(qDay)
@@ -126,7 +127,7 @@ export default function RoutinesPage() {
           ...d.data(),
           student_id: urlGroupId,
           completed: false,
-          parent_exercise_id: null,
+          parent_exercise_id: d.data().parent_exercise_id || null,
           exercise_type: d.data().exercise_type || "NORMAL",
         })) as Exercise[];
         setExercises(groupExercises);
@@ -151,10 +152,10 @@ export default function RoutinesPage() {
     setLoadingExercises(true);
     try {
       const data = await fetchRoutineData(user.uid, selectedStudent);
-      
+
       const qLink = query(collection(db, "trainer_students"), where("trainer_id", "==", user.uid), where("student_id", "==", selectedStudent));
       const linkSnap = await getDocs(qLink);
-      
+
       if (!linkSnap.empty) {
         setNutritionLevel(linkSnap.docs[0].data().plan_alimentacion || "none");
       } else {
@@ -192,6 +193,10 @@ export default function RoutinesPage() {
     const updated = { ...currentDayConfig, [field]: value === "none" ? "" : value };
     setDayConfigs((prev) => ({ ...prev, [selectedDay]: updated }));
     await saveDayConfigService(user.uid, targetId, selectedDay, updated.body_part_1, updated.body_part_2);
+    if (!isGroupMode) {
+      await autoUpdateRoutineCycle(user.uid, selectedStudent);
+      fetchData();
+    }
   };
 
   const validatePyramidReps = (value: string): boolean => {
@@ -233,7 +238,7 @@ export default function RoutinesPage() {
       if (isGroupMode) {
         // Group mode: insert into group_exercises
         const exerciseType = form.isToFailure ? "AL_FALLO" : form.isDropset ? "DROP_SET" : form.isPiramide ? "PIRAMIDE" : "NORMAL";
-        await addDoc(collection(db, "group_exercises"), {
+        const parentDocRef = await addDoc(collection(db, "group_exercises"), {
           group_id: urlGroupId!,
           trainer_id: user.uid,
           name: form.name,
@@ -249,8 +254,29 @@ export default function RoutinesPage() {
           exercise_type: exerciseType,
           created_at: new Date().toISOString()
         });
+
+        if (biSerieEnabled) {
+          await addDoc(collection(db, "group_exercises"), {
+            group_id: urlGroupId!,
+            trainer_id: user.uid,
+            name: biForm.name,
+            sets: parseInt(form.sets),
+            reps: biForm.isToFailure ? 0 : parseInt(biForm.reps),
+            weight: 0,
+            day: selectedDay,
+            body_part: combinedBodyPart || currentDayConfig.body_part_1,
+            is_to_failure: biForm.isToFailure,
+            is_dropset: biForm.isDropset,
+            is_piramide: false,
+            pyramid_reps: null,
+            exercise_type: "BI_SERIE",
+            parent_exercise_id: parentDocRef.id,
+            created_at: new Date().toISOString()
+          });
+        }
       } else {
         // Student mode
+        const routine = await getOrCreateActiveRoutine(user.uid, "ALUMNO", selectedStudent);
         const exerciseType = form.isToFailure ? "AL_FALLO" : form.isDropset ? "DROP_SET" : form.isPiramide ? "PIRAMIDE" : "NORMAL";
         const newId = await addExerciseService({
           trainer_id: user.uid,
@@ -266,15 +292,11 @@ export default function RoutinesPage() {
           is_piramide: form.isPiramide,
           pyramid_reps: form.isPiramide ? form.pyramidReps.trim() : null,
           exercise_type: exerciseType,
-          routine_id: activeRoutineId || "default",
+          routine_id: routine.id,
         });
 
-        // Ensure routine exists and link
         try {
-          const routine = await getOrCreateActiveRoutine(user.uid, "ALUMNO", selectedStudent);
-          if (newId) {
-            await updateDoc(doc(db, "exercises", newId), { routine_id: routine.id });
-          }
+          // Ya no necesitamos actualizar el routine_id porque se lo pasamos al crear
         } catch (err) {
           console.error("Error linking to routine:", err);
         }
@@ -304,15 +326,19 @@ export default function RoutinesPage() {
           });
         }
       }
+      
+      if (!isGroupMode) {
+        await autoUpdateRoutineCycle(user.uid, selectedStudent);
+      }
 
       toast.success(biSerieEnabled ? "Ejercicio + Bi Serie agregados" : "Ejercicio agregado");
       setForm({ name: "", sets: "", reps: "", isToFailure: false, isDropset: false, isPiramide: false, pyramidReps: "", exerciseType: "NORMAL" });
       setBiForm({ name: "", reps: "", isToFailure: false, isDropset: false });
       setBiSerieEnabled(false);
       fetchData();
-    } catch (err: any) { 
+    } catch (err: any) {
       console.error("DEBUG ERROR ADDING EXERCISE:", err);
-      toast.error("Error: " + (err.message || "al agregar ejercicio")); 
+      toast.error("Error: " + (err.message || "al agregar ejercicio"));
     }
   };
 
@@ -329,10 +355,11 @@ export default function RoutinesPage() {
             `Ejercicio eliminado: ${exercise.name} (${exercise.day})`, exerciseId
           );
         }
+        await autoUpdateRoutineCycle(user.uid, selectedStudent);
       }
       fetchData();
-    } catch (err) { 
-      toast.error("Error al eliminar"); 
+    } catch (err) {
+      toast.error("Error al eliminar");
     }
   };
 
@@ -353,11 +380,12 @@ export default function RoutinesPage() {
             `Ejercicio eliminado: ${ex?.name || "?"} (${ex?.day || "?"})`, id
           );
         }
+        await autoUpdateRoutineCycle(user.uid, selectedStudent);
       }
       toast.success(`${ids.length} ejercicio(s) eliminado(s)`);
       fetchData();
-    } catch (err) { 
-      toast.error("Error al eliminar ejercicios"); 
+    } catch (err) {
+      toast.error("Error al eliminar ejercicios");
     }
     setDeleting(false);
     setShowDeleteConfirm(false);
@@ -383,6 +411,7 @@ export default function RoutinesPage() {
       const dateStr = await setRoutineNextChangeDate(user.uid, selectedStudent, days);
       setRoutineNextChange(dateStr);
       toast.success(`Cambio de rutina programado en ${days} días`);
+      fetchData();
     } catch (err) {
       toast.error("Error al programar cambio de rutina");
     }
@@ -395,17 +424,48 @@ export default function RoutinesPage() {
   childExercises.forEach((c) => { if (c.parent_exercise_id) childByParent.set(c.parent_exercise_id, c); });
 
   const handleToggleBiSerie = async (ex: Exercise) => {
-    if (!user || isGroupMode) return;
-    if (!selectedStudent) return;
+    if (!user) return;
+    const targetId = isGroupMode ? urlGroupId : selectedStudent;
+    if (!targetId) return;
     const hasChild = childByParent.has(ex.id);
     try {
       if (hasChild) {
-        await removeBiSerieChild(ex.id);
+        if (isGroupMode) {
+          const childEx = childByParent.get(ex.id);
+          if (childEx) await deleteDoc(doc(db, "group_exercises", childEx.id));
+        } else {
+          await removeBiSerieChild(ex.id);
+        }
         toast.success("Bi Serie eliminada");
       } else {
-        await addBiSerieChild(ex, user.uid, selectedStudent);
+        if (isGroupMode) {
+          await addDoc(collection(db, "group_exercises"), {
+            group_id: urlGroupId!,
+            trainer_id: user.uid,
+            name: "Bi Serie",
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: 0,
+            day: ex.day,
+            body_part: ex.body_part,
+            is_to_failure: false,
+            is_dropset: false,
+            is_piramide: false,
+            pyramid_reps: null,
+            exercise_type: "BI_SERIE",
+            parent_exercise_id: ex.id,
+            created_at: new Date().toISOString()
+          });
+        } else {
+          await addBiSerieChild(ex, user.uid, selectedStudent);
+        }
         toast.success("Bi Serie agregada");
       }
+      
+      if (!isGroupMode) {
+        await autoUpdateRoutineCycle(user.uid, selectedStudent);
+      }
+
       fetchData();
     } catch { toast.error("Error al modificar Bi Serie"); }
   };
@@ -443,8 +503,8 @@ export default function RoutinesPage() {
       {/* Header section with back button */}
       <div className="flex items-center gap-4">
         {(selectedStudent || isGroupMode) && (
-          <Button 
-            variant="ghost" size="icon" 
+          <Button
+            variant="ghost" size="icon"
             onClick={handleBackToList}
             className="rounded-full hover:bg-accent/10 text-accent transition-all duration-300 hover:scale-110"
           >
@@ -634,15 +694,15 @@ export default function RoutinesPage() {
                                     <span className="text-sm font-semibold">Al Fallo</span>
                                     <span className="text-[10px] text-muted-foreground">Esfuerzo máximo</span>
                                   </div>
-                                  <Switch 
-                                    checked={form.isToFailure} 
-                                    onCheckedChange={(checked) => setForm({ 
-                                      ...form, 
-                                      isToFailure: checked, 
+                                  <Switch
+                                    checked={form.isToFailure}
+                                    onCheckedChange={(checked) => setForm({
+                                      ...form,
+                                      isToFailure: checked,
                                       reps: checked ? "" : form.reps,
                                       isDropset: checked ? false : form.isDropset,
                                       isPiramide: checked ? false : form.isPiramide
-                                    })} 
+                                    })}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
@@ -650,14 +710,14 @@ export default function RoutinesPage() {
                                     <span className="text-sm font-semibold">Drop Set</span>
                                     <span className="text-[10px] text-muted-foreground">Descenso de peso</span>
                                   </div>
-                                  <Switch 
-                                    checked={form.isDropset} 
-                                    onCheckedChange={(checked) => setForm({ 
-                                      ...form, 
+                                  <Switch
+                                    checked={form.isDropset}
+                                    onCheckedChange={(checked) => setForm({
+                                      ...form,
                                       isDropset: checked,
                                       isToFailure: checked ? false : form.isToFailure,
                                       isPiramide: checked ? false : form.isPiramide
-                                    })} 
+                                    })}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
@@ -665,15 +725,15 @@ export default function RoutinesPage() {
                                     <span className="text-sm font-semibold">Pirámide</span>
                                     <span className="text-[10px] text-muted-foreground">Carga progresiva</span>
                                   </div>
-                                  <Switch 
-                                    checked={form.isPiramide} 
-                                    onCheckedChange={(checked) => setForm({ 
-                                      ...form, 
-                                      isPiramide: checked, 
+                                  <Switch
+                                    checked={form.isPiramide}
+                                    onCheckedChange={(checked) => setForm({
+                                      ...form,
+                                      isPiramide: checked,
                                       pyramidReps: checked ? form.pyramidReps : "",
                                       isToFailure: checked ? false : form.isToFailure,
                                       isDropset: checked ? false : form.isDropset
-                                    })} 
+                                    })}
                                   />
                                 </div>
                               </div>
@@ -690,54 +750,52 @@ export default function RoutinesPage() {
                             </div>
 
                             {/* BI SERIE Section */}
-                            {!isGroupMode && (
-                              <div className="p-4 rounded-2xl bg-accent/5 border border-accent/20 space-y-4">
-                                <div className="flex items-center justify-between p-2">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-accent tracking-tight">BI SERIE</span>
-                                    <span className="text-[10px] text-muted-foreground">Bi-serie vinculada</span>
-                                  </div>
-                                  <Switch checked={biSerieEnabled} onCheckedChange={(checked) => {
-                                    setBiSerieEnabled(checked);
-                                    if (!checked) setBiForm({ name: "", reps: "", isToFailure: false, isDropset: false });
-                                  }} />
+                            <div className="p-4 rounded-2xl bg-accent/5 border border-accent/20 space-y-4">
+                              <div className="flex items-center justify-between p-2">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-accent tracking-tight">BI SERIE</span>
+                                  <span className="text-[10px] text-muted-foreground">Bi-serie vinculada</span>
                                 </div>
+                                <Switch checked={biSerieEnabled} onCheckedChange={(checked) => {
+                                  setBiSerieEnabled(checked);
+                                  if (!checked) setBiForm({ name: "", reps: "", isToFailure: false, isDropset: false });
+                                }} />
+                              </div>
 
-                                {biSerieEnabled && (
-                                  <div className="space-y-4 pl-3 border-l-2 border-accent/30 animate-in slide-in-from-left-2">
+                              {biSerieEnabled && (
+                                <div className="space-y-4 pl-3 border-l-2 border-accent/30 animate-in slide-in-from-left-2">
+                                  <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-muted-foreground">Ejercicio Complementario</Label>
+                                    {availableExercises.length > 0 ? (
+                                      <Select value={biForm.name} onValueChange={(v) => setBiForm({ ...biForm, name: v })}>
+                                        <SelectTrigger className="input-premium h-10 border-accent/20"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
+                                        <SelectContent>
+                                          {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      <Input placeholder="Escribir..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="input-premium h-10 border-accent/20" />
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Ejercicio Complementario</Label>
-                                      {availableExercises.length > 0 ? (
-                                        <Select value={biForm.name} onValueChange={(v) => setBiForm({ ...biForm, name: v })}>
-                                          <SelectTrigger className="input-premium h-10 border-accent/20"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
-                                          <SelectContent>
-                                            {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
-                                          </SelectContent>
-                                        </Select>
-                                      ) : (
-                                        <Input placeholder="Escribir..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="input-premium h-10 border-accent/20" />
-                                      )}
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Reps</Label>
+                                      <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="input-premium h-10 border-accent/20" disabled={biForm.isToFailure} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-1">
-                                        <Label className="text-[10px] uppercase text-muted-foreground">Reps</Label>
-                                        <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="input-premium h-10 border-accent/20" disabled={biForm.isToFailure} />
+                                    <div className="flex flex-col gap-1.5 justify-end pb-1 px-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-medium">Al Fallo</span>
+                                        <Switch checked={biForm.isToFailure} onCheckedChange={(checked) => setBiForm({ ...biForm, isToFailure: checked, reps: checked ? "" : biForm.reps })} className="scale-75 origin-right" />
                                       </div>
-                                      <div className="flex flex-col gap-1.5 justify-end pb-1 px-1">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[11px] font-medium">Al Fallo</span>
-                                          <Switch checked={biForm.isToFailure} onCheckedChange={(checked) => setBiForm({ ...biForm, isToFailure: checked, reps: checked ? "" : biForm.reps })} className="scale-75 origin-right" />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[11px] font-medium">Drop Set</span>
-                                          <Switch checked={biForm.isDropset} onCheckedChange={(checked) => setBiForm({ ...biForm, isDropset: checked })} className="scale-75 origin-right" />
-                                        </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-medium">Drop Set</span>
+                                        <Switch checked={biForm.isDropset} onCheckedChange={(checked) => setBiForm({ ...biForm, isDropset: checked })} className="scale-75 origin-right" />
                                       </div>
                                     </div>
                                   </div>
-                                )}
-                              </div>
-                            )}
+                                </div>
+                              )}
+                            </div>
 
                             <Button onClick={handleAdd} className="btn-premium-primary w-full h-12 shadow-xl" disabled={!currentDayConfig.body_part_1}>
                               <Plus className="h-5 w-5 mr-2" /> Agregar Ejercicio
@@ -759,10 +817,10 @@ export default function RoutinesPage() {
                                 {combinedBodyPart && <Badge variant="outline" className="ml-1 border-primary/30 text-[9px] uppercase">{combinedBodyPart}</Badge>}
                               </CardTitle>
                               {selectedIds.size > 0 && (
-                                <Button 
-                                  variant="destructive" size="sm" 
-                                  className="h-8 px-3 rounded-lg text-xs" 
-                                  onClick={() => setShowDeleteConfirm(true)} 
+                                <Button
+                                  variant="destructive" size="sm"
+                                  className="h-8 px-3 rounded-lg text-xs"
+                                  onClick={() => setShowDeleteConfirm(true)}
                                   disabled={deleting}
                                 >
                                   <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Borrar ({selectedIds.size})
@@ -790,19 +848,19 @@ export default function RoutinesPage() {
                                     <div key={ex.id} className="group/item">
                                       <div className={cn(
                                         "flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 border",
-                                        isSelected 
-                                          ? "bg-primary/10 border-primary/40 shadow-inner" 
+                                        isSelected
+                                          ? "bg-primary/10 border-primary/40 shadow-inner"
                                           : "bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10"
                                       )}>
-                                        <Checkbox 
-                                          checked={isSelected} 
-                                          onCheckedChange={() => toggleSelect(ex.id)} 
-                                          className="h-5 w-5 rounded-md border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={() => toggleSelect(ex.id)}
+                                          className="h-5 w-5 rounded-md border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                         />
                                         <div className="flex-1 min-w-0">
                                           <p className="font-bold text-sm tracking-tight truncate">{ex.name}</p>
                                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[11px] text-muted-foreground font-medium">
-                                            <span className="text-primary/90">{ex.sets} SERIES</span>
+                                            <span className="text-primary/90">{ex.sets || "-"} SERIES</span>
                                             <span className="opacity-40">·</span>
                                             <span className={cn(ex.is_to_failure || ex.is_piramide ? "text-destructive" : "text-white/80")}>
                                               {ex.is_piramide && ex.pyramid_reps ? ex.pyramid_reps : ex.is_to_failure ? "AL FALLO" : `${ex.reps} REPS`}
@@ -821,22 +879,22 @@ export default function RoutinesPage() {
                                             )}
                                           </div>
                                         </div>
-                                        <Button 
-                                          variant="ghost" size="icon" 
+                                        <Button
+                                          variant="ghost" size="icon"
                                           className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/item:opacity-100 transition-opacity"
                                           onClick={() => handleRemove(ex.id)}
                                         >
                                           <Trash2 className="h-4 w-4" />
                                         </Button>
                                       </div>
-                                      
+
                                       {child && (
                                         <div className="ml-6 mt-1 flex items-center gap-3 p-3 rounded-2xl bg-accent/5 border border-accent/10 shadow-sm animate-in slide-in-from-left-2">
                                           <div className="w-1.5 h-8 bg-accent/40 rounded-full flex-shrink-0" />
                                           <div className="flex-1 min-w-0">
                                             <p className="font-bold text-xs text-accent uppercase tracking-wide truncate">{child.name}</p>
                                             <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold">
-                                              <span className="text-accent/80">{child.sets} SETS</span>
+                                              <span className="text-accent/80">{child.sets || "-"} SETS</span>
                                               <span className="text-muted-foreground/40">·</span>
                                               <span className={child.is_to_failure ? "text-destructive" : "text-muted-foreground"}>
                                                 {child.is_to_failure ? "AL FALLO" : `${child.reps} REPS`}
@@ -844,9 +902,9 @@ export default function RoutinesPage() {
                                               {child.is_dropset && <Badge className="bg-accent/20 text-accent border-0 h-3 text-[7px] px-1 ml-1">DS</Badge>}
                                             </div>
                                           </div>
-                                          <Button 
-                                            variant="ghost" size="icon" 
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-40 hover:opacity-100 transition-opacity" 
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-40 hover:opacity-100 transition-opacity"
                                             onClick={() => handleRemove(child.id)}
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -901,7 +959,7 @@ export default function RoutinesPage() {
                           <CalendarClock className="h-3 w-3 text-primary/60" />
                           Fecha de Asignación
                         </Label>
-                        <Input 
+                        <Input
                           type="date"
                           value={routineAssignmentDate || ""}
                           onChange={async (e) => {
@@ -920,14 +978,22 @@ export default function RoutinesPage() {
                           <Clock className="h-3 w-3 text-primary/60" />
                           Próximo Cambio
                         </Label>
-                        <Input 
+                        <Input
                           type="date"
                           value={routineNextChange || ""}
                           onChange={async (e) => {
                             const val = e.target.value;
                             setRoutineNextChange(val);
                             if (user && selectedStudent) {
-                              await setRoutineCycleDates(user.uid, selectedStudent, routineAssignmentDate || "", val);
+                              const today = new Date();
+                              const offset = today.getTimezoneOffset();
+                              const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+                              const todayStr = todayLocal.toISOString().split('T')[0];
+                              const assignDate = routineAssignmentDate || todayStr;
+                              if (!routineAssignmentDate) {
+                                setRoutineAssignmentDate(assignDate);
+                              }
+                              await setRoutineCycleDates(user.uid, selectedStudent, assignDate, val);
                             }
                           }}
                           className="input-premium h-11 border-primary/10 bg-black/20 focus:border-primary/40"
@@ -943,17 +1009,14 @@ export default function RoutinesPage() {
                         </p>
                       </div>
                     )}
-                    
+
                     {daysUntilChange === null && (
                       <div className="grid grid-cols-4 gap-2">
                         {[7, 14, 21, 30].map((d) => (
-                          <Button 
-                            key={d} size="sm" variant="outline" 
-                            className="h-10 rounded-lg text-xs font-bold border-primary/20 hover:bg-primary hover:text-white transition-all" 
-                            onClick={async () => {
-                              const newDate = await setRoutineNextChangeDate(user!.uid, selectedStudent, d);
-                              setRoutineNextChange(newDate);
-                            }}
+                          <Button
+                            key={d} size="sm" variant="outline"
+                            className="h-10 rounded-lg text-xs font-bold border-primary/20 hover:bg-primary hover:text-white transition-all"
+                            onClick={() => handleSetNextChange(d)}
                           >
                             {d}D
                           </Button>
@@ -962,7 +1025,7 @@ export default function RoutinesPage() {
                     )}
                   </div>
                 )}
-                
+
                 <div className="space-y-3">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Log de Cambios</Label>
                   <div className="p-4 rounded-2xl bg-black/20 border border-white/5 max-h-[150px] overflow-y-auto text-[10px] font-mono leading-relaxed hide-scrollbar">
@@ -986,8 +1049,8 @@ export default function RoutinesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel className="rounded-xl border-none hover:bg-white/5">Cerrar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleBulkDelete} 
+            <AlertDialogAction
+              onClick={handleBulkDelete}
               disabled={deleting}
               className="bg-destructive hover:bg-destructive/80 text-white rounded-xl shadow-lg shadow-destructive/20"
             >

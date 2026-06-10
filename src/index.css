@@ -95,7 +95,11 @@
   }
 
   .card-glass {
-    @apply bg-card/90 backdrop-blur-sm border border-border/50;
+    @apply bg-card/90 backdrop-blur-md border border-border/40 shadow-xl;
+  }
+
+  .glass-panel {
+    @apply bg-background/60 backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-2xl;
   }
 
   .btn-gradient {
@@ -214,7 +218,7 @@
     --ring: 187 100% 42%;
     --primary-hover: 187 100% 50%;
     --card-hover: 222 47% 12%;
-    --neon-intensity: 0.4;
+    --neon-intensity: 0.2;
 }
 
 [data-theme="tierra-nature"] {
@@ -252,7 +256,7 @@
     --ring: 15 90% 55%;
     --primary-hover: 15 90% 65%;
     --card-hover: 350 40% 13%;
-    --neon-intensity: 0.4;
+    --neon-intensity: 0.2;
 }
 
 [data-theme="nocturna-elegante"] {
@@ -269,7 +273,7 @@
     --ring: 34 50% 65%;
     --primary-hover: 34 50% 75%;
     --card-hover: 230 35% 12%;
-    --neon-intensity: 0.3;
+    --neon-intensity: 0.15;
 }
 
 [data-theme="kiwi-night"] {
@@ -286,7 +290,7 @@
     --ring: 85 85% 55%;
     --primary-hover: 85 85% 65%;
     --card-hover: 140 15% 12%;
-    --neon-intensity: 0.4;
+    --neon-intensity: 0.2;
 }
 
 [data-theme="persian-ghost"] {
@@ -319,7 +323,7 @@
     --ring: 357 85% 50%;
     --primary-hover: 357 85% 60%;
     --card-hover: 350 40% 12%;
-    --neon-intensity: 0.4;
+    --neon-intensity: 0.2;
 }
 
 [data-theme="cyprus-sand"] {
@@ -336,7 +340,7 @@
     --ring: 49 90% 50%;
     --primary-hover: 49 90% 60%;
     --card-hover: 175 40% 13%;
-    --neon-intensity: 0.3;
+    --neon-intensity: 0.15;
 }
 
 [data-theme="plum-milk"] {
@@ -369,7 +373,7 @@
     --ring: 215 60% 40%;
     --primary-hover: 215 60% 50%;
     --card-hover: 215 30% 12%;
-    --neon-intensity: 0.3;
+    --neon-intensity: 0.15;
 }
 
 [data-theme="mari-mari"] {
@@ -386,7 +390,7 @@
     --ring: 0 70% 40%;
     --primary-hover: 0 70% 50%;
     --card-hover: 0 30% 12%;
-    --neon-intensity: 0.4;
+    --neon-intensity: 0.2;
 }
 
 [data-theme="papelitos"] {
@@ -435,6 +439,6 @@
     --ring: 35 60% 50%;
     --primary-hover: 35 60% 60%;
     --card-hover: 35 30% 12%;
-    --neon-intensity: 0.3;
+    --neon-intensity: 0.15;
 }
 }

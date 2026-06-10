@@ -15,7 +15,7 @@ import TrackingPage from "@/pages/trainer/TrackingPage";
 import NotificationsPage from "@/pages/trainer/NotificationsPage";
 import TrainingGroupsPage from "@/pages/trainer/TrainingGroupsPage";
 import TrainerSurveysPage from "@/pages/trainer/TrainerSurveysPage";
-import TodayRoutinePage from "@/pages/student/TodayRoutinePage";
+
 import MyPlansPage from "@/pages/student/MyPlansPage";
 import ProgressPage from "@/pages/student/ProgressPage";
 import StudentFeedPage from "@/pages/student/StudentFeedPage";
@@ -23,7 +23,7 @@ import StudentRoutinesPage from "@/pages/student/StudentRoutinesPage";
 import StudentDashboardPage from "@/pages/student/StudentDashboardPage";
 import PersonalChangePage from "@/pages/student/PersonalChangePage";
 import TransformationPage from "@/pages/student/TransformationPage";
-import StudentSurveysPage from "@/pages/student/StudentSurveysPage";
+
 import StudentMealsPage from "@/pages/student/StudentMealsPage";
 import PublicStudentView from "@/pages/PublicStudentView";
 import NotFound from "./pages/NotFound";
@@ -68,12 +68,12 @@ const App = () => (
               <Route path="/student/home" element={<ProtectedRoute requiredRole="student"><StudentDashboardPage /></ProtectedRoute>} />
               <Route path="/student/feed" element={<ProtectedRoute requiredRole="student"><StudentFeedPage /></ProtectedRoute>} />
               <Route path="/student/routines" element={<ProtectedRoute requiredRole="student"><StudentRoutinesPage /></ProtectedRoute>} />
-              <Route path="/student/today" element={<ProtectedRoute requiredRole="student"><TodayRoutinePage /></ProtectedRoute>} />
+
               <Route path="/student/plans" element={<ProtectedRoute requiredRole="student"><MyPlansPage /></ProtectedRoute>} />
               <Route path="/student/progress" element={<ProtectedRoute requiredRole="student"><ProgressPage /></ProtectedRoute>} />
               <Route path="/student/personal-change" element={<ProtectedRoute requiredRole="student"><PersonalChangePage /></ProtectedRoute>} />
               <Route path="/student/transformation" element={<ProtectedRoute requiredRole="student"><TransformationPage /></ProtectedRoute>} />
-              <Route path="/student/surveys" element={<ProtectedRoute requiredRole="student"><StudentSurveysPage /></ProtectedRoute>} />
+
               <Route path="/student/meals" element={<ProtectedRoute requiredRole="student"><StudentMealsPage /></ProtectedRoute>} />
             </Route>
             <Route path="/view/:studentId" element={<PublicStudentView />} />

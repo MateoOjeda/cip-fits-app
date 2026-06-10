@@ -198,7 +198,7 @@ export default function AuthPage() {
                   <Label htmlFor="reg-name" className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/80">Nombre Completo</Label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="reg-name" placeholder="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} className="input-premium pl-11 h-12 rounded-2xl bg-secondary/30" />
+                    <Input id="reg-name" placeholder="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} className="input-premium !pl-11 h-12 rounded-2xl bg-secondary/30" />
                   </div>
                 </div>
               )}
@@ -207,7 +207,7 @@ export default function AuthPage() {
                 <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/80">Correo Electrónico</Label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="input-premium pl-11 h-12 rounded-2xl bg-secondary/30" />
+                  <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="input-premium !pl-11 h-12 rounded-2xl bg-secondary/30" />
                 </div>
               </div>
               
@@ -220,7 +220,7 @@ export default function AuthPage() {
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="input-premium pl-11 h-12 rounded-2xl bg-secondary/30" />
+                  <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="input-premium !pl-11 h-12 rounded-2xl bg-secondary/30" />
                 </div>
               </div>
 

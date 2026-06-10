@@ -163,6 +163,38 @@ export async function assignGroupRoutineToStudent(
     activeSnap.docs.forEach(d => batchArch.update(d.ref, { status: "ARCHIVADA" }));
     await batchArch.commit();
   }
+
+  // 2. Automatically update routine cycle dates to keep the range active
+  const qLink = query(
+    collection(db, "trainer_students"),
+    where("trainer_id", "==", trainerId),
+    where("student_id", "==", studentId)
+  );
+  const linkSnap = await getDocs(qLink);
+  if (!linkSnap.empty) {
+    const docRef = linkSnap.docs[0].ref;
+    const data = linkSnap.docs[0].data();
+    
+    const today = new Date();
+    const offset = today.getTimezoneOffset();
+    const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+    const todayStr = todayLocal.toISOString().split('T')[0];
+    
+    const updates: any = {
+      routine_assignment_date: todayStr
+    };
+    
+    const currentNextChange = data.routine_next_change_date;
+    const isFuture = currentNextChange && new Date(currentNextChange) > today;
+    
+    if (!isFuture) {
+      const nextChange = new Date(today.getTime() - (offset * 60 * 1000));
+      nextChange.setDate(nextChange.getDate() + 30);
+      updates.routine_next_change_date = nextChange.toISOString().split('T')[0];
+    }
+    
+    await updateDoc(docRef, updates);
+  }
 }
 
 /**

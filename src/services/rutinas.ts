@@ -221,7 +221,15 @@ export async function setRoutineNextChangeDate(trainerId: string, studentId: str
   const snap = await getDocs(q);
   
   if (snap.docs.length > 0) {
-    await updateDoc(snap.docs[0].ref, { routine_next_change_date: dateStr });
+    const today = new Date();
+    const offset = today.getTimezoneOffset();
+    const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+    const todayStr = todayLocal.toISOString().split('T')[0];
+
+    await updateDoc(snap.docs[0].ref, { 
+      routine_assignment_date: todayStr,
+      routine_next_change_date: dateStr 
+    });
   }
   
   return dateStr;
@@ -230,8 +238,8 @@ export async function setRoutineNextChangeDate(trainerId: string, studentId: str
 export async function setRoutineCycleDates(
   trainerId: string, 
   studentId: string, 
-  assignmentDate: string, 
-  nextChangeDate: string
+  assignmentDate: string | null, 
+  nextChangeDate: string | null
 ) {
   const q = query(
     collection(db, "trainer_students"), 
@@ -241,10 +249,55 @@ export async function setRoutineCycleDates(
   const snap = await getDocs(q);
   
   if (snap.docs.length > 0) {
+    let finalAssignmentDate = assignmentDate;
+    if (!finalAssignmentDate) {
+      const today = new Date();
+      const offset = today.getTimezoneOffset();
+      const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+      finalAssignmentDate = todayLocal.toISOString().split('T')[0];
+    }
+
     await updateDoc(snap.docs[0].ref, { 
-      routine_assignment_date: assignmentDate,
+      routine_assignment_date: finalAssignmentDate,
       routine_next_change_date: nextChangeDate 
     });
+  }
+}
+
+export async function autoUpdateRoutineCycle(trainerId: string, studentId: string) {
+  const q = query(
+    collection(db, "trainer_students"), 
+    where("trainer_id", "==", trainerId), 
+    where("student_id", "==", studentId)
+  );
+  const snap = await getDocs(q);
+  
+  if (snap.docs.length > 0) {
+    const docRef = snap.docs[0].ref;
+    const data = snap.docs[0].data();
+    
+    // Get today's local date YYYY-MM-DD
+    const today = new Date();
+    const offset = today.getTimezoneOffset();
+    const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+    const todayStr = todayLocal.toISOString().split('T')[0];
+    
+    const updates: any = {
+      routine_assignment_date: todayStr
+    };
+    
+    // Check if next change date exists and is in the future
+    const currentNextChange = data.routine_next_change_date;
+    const isFuture = currentNextChange && new Date(currentNextChange) > today;
+    
+    if (!isFuture) {
+      // Set to today + 30 days to keep the cycle active
+      const nextChange = new Date(today.getTime() - (offset * 60 * 1000));
+      nextChange.setDate(nextChange.getDate() + 30);
+      updates.routine_next_change_date = nextChange.toISOString().split('T')[0];
+    }
+    
+    await updateDoc(docRef, updates);
   }
 }
 

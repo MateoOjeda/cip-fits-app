@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Save, Loader2, Palette, CreditCard, User } from "lucide-react";
+import { Settings, Save, Loader2, Palette, CreditCard, User, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import ProfilePhotoUpload from "./ProfilePhotoUpload";
 
 export default function UserSettingsDialog() {
-  const { user, role } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [mercadopagoAlias, setMercadopagoAlias] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
@@ -63,6 +63,17 @@ export default function UserSettingsDialog() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setOpen(false);
+      toast.success("Sesión cerrada correctamente");
+    } catch (err) {
+      console.error("Error al cerrar sesión:", err);
+      toast.error("Error al cerrar sesión");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -97,6 +108,12 @@ export default function UserSettingsDialog() {
                 initials={displayName.slice(0, 2).toUpperCase() || "??"} 
                 onUploaded={(url) => setAvatarUrl(url)}
               />
+              <div className="w-full mt-auto pt-6">
+                <Button variant="destructive" className="w-full gap-2" onClick={handleLogout}>
+                  <LogOut className="w-4 h-4" />
+                  Cerrar Sesión
+                </Button>
+              </div>
             </TabsContent>
             
             <TabsContent value="billing" className="pt-4 space-y-4">
@@ -139,6 +156,12 @@ export default function UserSettingsDialog() {
                 initials={displayName.slice(0, 2).toUpperCase() || "??"} 
                 onUploaded={(url) => setAvatarUrl(url)}
               />
+              <div className="w-full mt-auto pt-6">
+                <Button variant="destructive" className="w-full gap-2" onClick={handleLogout}>
+                  <LogOut className="w-4 h-4" />
+                  Cerrar Sesión
+                </Button>
+              </div>
             </TabsContent>
           </Tabs>
         )}

@@ -159,10 +159,10 @@ export default function StudentDashboardPage() {
               {pendingSurveys.length > 0 && (
                 <Badge 
                   className="bg-amber-500/20 text-amber-500 border-amber-500/30 rounded-full text-[10px] font-black px-3 py-1 flex items-center gap-1.5 animate-bounce shadow-lg shadow-amber-500/10 cursor-pointer hover:bg-amber-500/30 transition-colors"
-                  onClick={() => navigate("/student/surveys")}
+                  onClick={() => document.getElementById('encuestas-section')?.scrollIntoView({ behavior: 'smooth' })}
                 >
                   <ClipboardList className="h-3 w-3" />
-                  TENER ENCUESTAS PENDIENTES
+                  TIENES ENCUESTAS PENDIENTES
                 </Badge>
               )}
             </div>
@@ -326,6 +326,54 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
+      {/* ENCUESTAS SECTION */}
+      <div id="encuestas-section" className="space-y-4 pt-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-8 w-8 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+            <ClipboardList className="h-4 w-4" />
+          </div>
+          <h2 className="text-xl font-display font-black tracking-tight uppercase">Encuestas Pendientes</h2>
+        </div>
+
+        {pendingSurveys.length === 0 ? (
+          <Card className="card-premium border-white/5 bg-white/5 py-8 opacity-60">
+            <CardContent className="p-0 text-center flex flex-col items-center">
+              <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
+                No tienes encuestas pendientes por el momento
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-3">
+            {pendingSurveys.map((asst) => (
+              <Card 
+                key={asst.id} 
+                className="card-premium border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all duration-300 rounded-[2rem] p-5 cursor-pointer group shadow-lg hover:scale-[1.01]"
+                onClick={() => setActiveSurvey(asst)}
+              >
+                <CardContent className="p-0 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-primary/20 rounded-[1rem] flex items-center justify-center border border-primary/30 group-hover:rotate-6 transition-all duration-300 shadow-md shadow-primary/10">
+                      <ClipboardList className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base uppercase tracking-tight leading-none mb-1.5">{asst.survey?.title}</h3>
+                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest bg-primary/10 border-primary/20 text-primary px-2.5 py-0.5 rounded-full">
+                        Pendiente
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button className="btn-premium-primary h-9 px-5 rounded-xl shadow-md shadow-primary/20 transition-transform active:scale-95 text-xs">
+                    Responder
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* NOTIFICATIONS SECTION */}
       <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between gap-3">
@@ -359,38 +407,13 @@ export default function StudentDashboardPage() {
           </div>
         </div>
 
-        {notifications.length === 0 && pendingSurveys.length === 0 ? (
+        {notifications.length === 0 ? (
           <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2rem] opacity-40">
             <Bell className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
             <p className="text-xs font-bold uppercase tracking-widest">Sin novedades por ahora</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {pendingSurveys.map((survey) => (
-              <Card 
-                key={`survey-${survey.id}`} 
-                className="card-premium border-primary/40 bg-primary/10 hover:bg-primary/20 transition-all rounded-[2rem] p-5 cursor-pointer group"
-                onClick={() => setActiveSurvey(survey)}
-              >
-                <CardContent className="p-0 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 border border-primary/20">
-                    <ClipboardList className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Nueva Encuesta</span>
-                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                    </div>
-                    <p className="text-[14px] font-bold text-white/90 leading-tight uppercase tracking-tight">
-                      Tu entrenador te ha asignado la encuesta: {survey.survey?.title}
-                    </p>
-                  </div>
-                  <Button size="icon" variant="ghost" className="h-10 w-10 text-primary hover:bg-primary/20">
-                    <ChevronRight className="h-5 w-5" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
 
             {notifications.map((change) => {
               const config = CHANGE_CONFIG[change.change_type] || { icon: Bell, label: "Aviso" };

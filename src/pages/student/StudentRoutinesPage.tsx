@@ -8,15 +8,24 @@ import {
   where, 
   getDocs, 
   doc, 
-  getDoc 
+  getDoc,
+  updateDoc,
+  setDoc,
+  onSnapshot
 } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Dumbbell, CheckCircle, Lock, LockOpen, Users, Loader2 
+  Dumbbell, CheckCircle, Users, Loader2, ClipboardEdit, Plus, Flame, CalendarCheck
 } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "sonner";
+import DailyLogDialog from "@/components/student/DailyLogDialog";
+import RestTimer from "@/components/student/RestTimer";
+import ExerciseVideoButton from "@/components/student/ExerciseVideoButton";
 
 interface Exercise {
   id: string;
@@ -26,103 +35,74 @@ interface Exercise {
   weight: number;
   day: string;
   completed: boolean;
+  trainer_id: string;
+  body_part?: string;
+  is_to_failure?: boolean;
+  isGroup?: boolean;
+}
+
+interface SetData {
+  id: string;
+  weight: string;
+  reps: string;
+  completed: boolean;
 }
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const DAY_SHORT = ["L", "M", "X", "J", "V", "S", "D"];
 
+function getTodayDay(): string {
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  return days[new Date().getDay()];
+}
+
 export default function StudentRoutinesPage() {
   const { user } = useAuth();
-
+  
+  const today = getTodayDay();
+  const [selectedDay, setSelectedDay] = useState<string>(today);
+  const [activeTab, setActiveTab] = useState<string>("personal");
+  
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [groupExercises, setGroupExercises] = useState<any[]>([]);
+  const [groupExercises, setGroupExercises] = useState<Exercise[]>([]);
+  const [exerciseSets, setExerciseSets] = useState<Record<string, SetData[]>>({});
+  
   const [loading, setLoading] = useState(true);
   const [hasGroupRoutine, setHasGroupRoutine] = useState(false);
-  
-  const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
-  const [expandedSection, setExpandedSection] = useState<string | undefined>("personal");
-  const [blockedRoutines, setBlockedRoutines] = useState<{ personal: boolean; group: boolean }>({
-    personal: false,
-    group: false
-  });
-
-  // Load blocked state from localStorage
-  useEffect(() => {
-    if (user) {
-      const saved = localStorage.getItem(`blocked_routines_${user.uid}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setBlockedRoutines(parsed);
-          
-          if (!parsed.personal) {
-            setExpandedSection("personal");
-          } else if (!parsed.group && hasGroupRoutine) {
-            setExpandedSection("group");
-          } else {
-            setExpandedSection(undefined);
-          }
-        } catch (e) {
-          console.error("Error loading blocked state:", e);
-        }
-      } else {
-        setExpandedSection("personal");
-      }
-    }
-  }, [user, hasGroupRoutine]);
-
-  useEffect(() => {
-    if (expandedSection === "personal" && blockedRoutines.personal) {
-      setExpandedSection(undefined);
-    } else if (expandedSection === "group" && blockedRoutines.group) {
-      setExpandedSection(undefined);
-    }
-  }, [expandedSection, blockedRoutines]);
-
-  const toggleBlock = (type: 'personal' | 'group') => {
-    const isNowBlocked = !blockedRoutines[type];
-    let newState = { ...blockedRoutines, [type]: isNowBlocked };
-    
-    if (!isNowBlocked) {
-      const otherType = type === 'personal' ? 'group' : 'personal';
-      newState[otherType] = true;
-    }
-    
-    setBlockedRoutines(newState);
-    if (user) {
-      localStorage.setItem(`blocked_routines_${user.uid}`, JSON.stringify(newState));
-      window.dispatchEvent(new Event('storage'));
-    }
-    toast.success(isNowBlocked ? "Rutina bloqueada" : "Rutina activada (la otra se ha bloqueado)");
-    
-    if (isNowBlocked && expandedSection === type) {
-      setExpandedSection(undefined);
-    } else if (!isNowBlocked) {
-      setExpandedSection(type);
-    }
-  };
+  const [logExercise, setLogExercise] = useState<Exercise | null>(null);
 
   const fetchExercises = useCallback(async () => {
     if (!user) return;
     setLoading(true);
 
     try {
+      const todayDate = new Date().toISOString().split("T")[0];
+
       // Fetch Personal Exercises
       const qEx = query(collection(db, "exercises"), where("student_id", "==", user.uid));
       const snapEx = await getDocs(qEx);
-      setExercises(snapEx.docs.map(d => ({ id: d.id, ...d.data() } as Exercise)));
+      const personalExs = snapEx.docs.map(d => ({ id: d.id, ...d.data(), isGroup: false } as Exercise));
+      setExercises(personalExs);
 
       // Fetch Group Memberships
       const qMem = query(collection(db, "training_group_members"), where("student_id", "==", user.uid));
       const snapMem = await getDocs(qMem);
       
+      let groupExs: Exercise[] = [];
       if (!snapMem.empty) {
         const groupId = snapMem.docs[0].data().group_id;
         const qGrpEx = query(collection(db, "group_exercises"), where("group_id", "==", groupId));
         const snapGrpEx = await getDocs(qGrpEx);
         
         if (!snapGrpEx.empty) {
-          setGroupExercises(snapGrpEx.docs.map(d => ({ id: d.id, ...d.data() })));
+          groupExs = snapGrpEx.docs.map(d => ({ 
+            id: d.id, 
+            ...d.data(),
+            completed: false, // Will be overridden if log exists
+            trainer_id: d.data().trainer_id || "",
+            isGroup: true 
+          } as Exercise));
+          setGroupExercises(groupExs);
           setHasGroupRoutine(true);
         } else {
           setGroupExercises([]);
@@ -132,16 +112,202 @@ export default function StudentRoutinesPage() {
         setGroupExercises([]);
         setHasGroupRoutine(false);
       }
+
+      const allExercises = [...personalExs, ...groupExs];
+
+      // Fetch logs for today to mark completions
+      let weights: Record<string, string> = {};
+      const completedLogIds = new Set<string>();
+      if (allExercises.length > 0) {
+        const qLogs = query(
+          collection(db, "exercise_logs"),
+          where("student_id", "==", user.uid),
+          where("log_date", "==", todayDate)
+        );
+        const snapLogs = await getDocs(qLogs);
+        snapLogs.forEach(d => {
+          const data = d.data();
+          if (data.actual_weight !== null) {
+            weights[data.exercise_id] = String(data.actual_weight);
+          }
+          if (data.completed) {
+            completedLogIds.add(data.exercise_id);
+          }
+        });
+      }
+
+      // Mark exercises as completed if there's a log for today
+      const updatedExercises = personalExs.map(ex => {
+        if (ex.day === today && completedLogIds.has(ex.id)) {
+          return { ...ex, completed: true };
+        }
+        return ex;
+      });
+      const updatedGroupExercises = groupExs.map(ex => {
+         if (ex.day === today && completedLogIds.has(ex.id)) {
+           return { ...ex, completed: true };
+         }
+         return ex;
+      });
+
+      setExercises(updatedExercises);
+      setGroupExercises(updatedGroupExercises);
+
+      // Load Sets from localStorage
+      const savedStateStr = localStorage.getItem(`routine_sets_${user.uid}_${todayDate}`);
+      let savedState: Record<string, SetData[]> = {};
+      if (savedStateStr) {
+        try {
+          savedState = JSON.parse(savedStateStr);
+        } catch (e) {}
+      }
+
+      const newExerciseSets: Record<string, SetData[]> = {};
+      allExercises.forEach((ex) => {
+        if (savedState[ex.id]) {
+           if (ex.completed && !savedState[ex.id].every(s => s.completed)) {
+             newExerciseSets[ex.id] = savedState[ex.id].map(s => ({ ...s, completed: true }));
+           } else {
+             newExerciseSets[ex.id] = savedState[ex.id];
+           }
+        } else {
+           const setsCount = ex.sets || 1;
+           const defaultWeight = weights[ex.id] || ex.weight?.toString() || "";
+           const sets: SetData[] = [];
+           for (let i = 0; i < setsCount; i++) {
+             sets.push({
+               id: `${ex.id}-set-${i}`,
+               weight: defaultWeight,
+               reps: ex.reps?.toString() || "",
+               completed: ex.completed,
+             });
+           }
+           newExerciseSets[ex.id] = sets;
+        }
+      });
+
+      setExerciseSets(newExerciseSets);
+      localStorage.setItem(`routine_sets_${user.uid}_${todayDate}`, JSON.stringify(newExerciseSets));
+
     } catch (err) {
       console.error("Error fetching exercises:", err);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, today]);
 
   useEffect(() => {
     fetchExercises();
   }, [fetchExercises]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "exercises"), where("student_id", "==", user.uid));
+    const unsubscribe = onSnapshot(q, () => {
+      fetchExercises();
+    });
+    window.addEventListener('storage', fetchExercises);
+    return () => { 
+      unsubscribe();
+      window.removeEventListener('storage', fetchExercises);
+    };
+  }, [user, fetchExercises]);
+
+  const saveExerciseProgress = async (exerciseId: string, sets: SetData[], markCompleted: boolean) => {
+    const isGroup = groupExercises.some(e => e.id === exerciseId);
+    const exercise = isGroup ? groupExercises.find(e => e.id === exerciseId) : exercises.find(e => e.id === exerciseId);
+    
+    if (!exercise || !user) return;
+
+    try {
+      const maxWeight = Math.max(...sets.map(s => parseFloat(s.weight) || 0), 0);
+      const currentSetsCount = sets.length;
+      const todayDate = new Date().toISOString().split("T")[0];
+      
+      if (!isGroup) {
+        await updateDoc(doc(db, "exercises", exerciseId), { completed: markCompleted });
+        setExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, completed: markCompleted } : e)));
+      } else {
+        setGroupExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, completed: markCompleted } : e)));
+      }
+
+      if (markCompleted) {
+        const logId = `${exercise.id}_${todayDate}`;
+        await setDoc(doc(db, "exercise_logs", logId), {
+          exercise_id: exercise.id,
+          student_id: user.uid,
+          trainer_id: exercise.trainer_id,
+          log_date: todayDate,
+          completed: true,
+          actual_weight: maxWeight > 0 ? maxWeight : null,
+          actual_sets: currentSetsCount,
+          actual_reps: exercise.is_to_failure ? null : exercise.reps,
+          created_at: new Date().toISOString()
+        }, { merge: true });
+
+        toast.success(`${exercise.name} completado`);
+      }
+    } catch (err) {
+      console.error("Error saving exercise progress:", err);
+      toast.error("Error al actualizar la base de datos");
+    }
+  };
+
+  const handleSetComplete = async (exerciseId: string, setId: string, completed: boolean) => {
+    setExerciseSets((prev) => {
+      const next = { ...prev };
+      next[exerciseId] = next[exerciseId].map(s => s.id === setId ? { ...s, completed } : s);
+      const todayDate = new Date().toISOString().split("T")[0];
+      localStorage.setItem(`routine_sets_${user?.uid}_${todayDate}`, JSON.stringify(next));
+      
+      const allCompleted = next[exerciseId].every(s => s.completed);
+      
+      const isGroup = groupExercises.some(e => e.id === exerciseId);
+      const exercise = isGroup ? groupExercises.find(e => e.id === exerciseId) : exercises.find(e => e.id === exerciseId);
+      
+      if (exercise && allCompleted && !exercise.completed) {
+        saveExerciseProgress(exerciseId, next[exerciseId], true).catch(console.error);
+      } else if (exercise && !allCompleted && exercise.completed) {
+        saveExerciseProgress(exerciseId, next[exerciseId], false).catch(console.error);
+      }
+      return next;
+    });
+  };
+
+  const handleSetChange = (exerciseId: string, setId: string, field: "weight"|"reps", value: string) => {
+    setExerciseSets((prev) => {
+      const next = { ...prev };
+      next[exerciseId] = next[exerciseId].map(s => s.id === setId ? { ...s, [field]: value } : s);
+      const todayDate = new Date().toISOString().split("T")[0];
+      localStorage.setItem(`routine_sets_${user?.uid}_${todayDate}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleAddSet = (exerciseId: string) => {
+    setExerciseSets((prev) => {
+      const next = { ...prev };
+      const currentSets = next[exerciseId] || [];
+      const lastSet = currentSets[currentSets.length - 1];
+      next[exerciseId] = [...currentSets, {
+        id: `${exerciseId}-set-${currentSets.length}-${Date.now()}`,
+        weight: lastSet ? lastSet.weight : "",
+        reps: lastSet ? lastSet.reps : "",
+        completed: false
+      }];
+      const todayDate = new Date().toISOString().split("T")[0];
+      localStorage.setItem(`routine_sets_${user?.uid}_${todayDate}`, JSON.stringify(next));
+      
+      const isGroup = groupExercises.some(e => e.id === exerciseId);
+      const exercise = isGroup ? groupExercises.find(e => e.id === exerciseId) : exercises.find(e => e.id === exerciseId);
+      
+      if (exercise && exercise.completed) {
+        saveExerciseProgress(exerciseId, next[exerciseId], false).catch(console.error);
+      }
+      
+      return next;
+    });
+  };
 
   if (loading) {
     return (
@@ -151,332 +317,331 @@ export default function StudentRoutinesPage() {
     );
   }
 
-  const exercisesByDay: Record<string, Exercise[]> = {};
-  exercises.forEach((ex) => {
-    if (!exercisesByDay[ex.day]) exercisesByDay[ex.day] = [];
-    exercisesByDay[ex.day].push(ex);
-  });
+  const currentPersonalExs = exercises.filter(e => e.day === selectedDay);
+  const currentGroupExs = groupExercises.filter(e => e.day === selectedDay);
+  
+  const allPersonalCompleted = currentPersonalExs.length > 0 && currentPersonalExs.every(e => e.completed);
+  const allGroupCompleted = currentGroupExs.length > 0 && currentGroupExs.every(e => e.completed);
 
-  const groupExercisesByDay: Record<string, any[]> = {};
-  groupExercises.forEach((ex) => {
-    if (!groupExercisesByDay[ex.day]) groupExercisesByDay[ex.day] = [];
-    groupExercisesByDay[ex.day].push(ex);
-  });
+  const renderExercises = (exs: Exercise[], isGroup: boolean) => {
+    if (exs.length === 0) {
+      return (
+        <Card className="card-glass border-white/5">
+          <CardContent className="p-8 text-center flex flex-col items-center">
+            <CalendarCheck className="h-12 w-12 text-muted-foreground/30 mb-3" />
+            <h3 className="font-semibold text-muted-foreground">Día de descanso</h3>
+            <p className="text-xs text-muted-foreground/60 mt-1">No tienes ejercicios programados para el {selectedDay.toLowerCase()}</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Group by body part (optional, as in original TodayRoutinePage)
+    const grouped: Record<string, Exercise[]> = {};
+    exs.forEach((ex) => {
+      const key = ex.body_part || "General";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(ex);
+    });
+
+    return (
+      <div className="space-y-6">
+        {Object.entries(grouped).map(([bodyPart, partExs]) => (
+          <div key={bodyPart} className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+              <Badge variant="outline" className={cn(
+                "uppercase tracking-widest text-[9px] px-4 py-1",
+                isGroup ? "border-accent/40 text-accent bg-accent/5" : "badge-info-tag"
+              )}>
+                {bodyPart}
+              </Badge>
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {partExs.map((exercise) => {
+                const accentColor = isGroup ? "accent" : "primary";
+                return (
+                  <Card
+                    key={exercise.id}
+                    className={cn(
+                      "card-premium border-border/40 bg-card transition-all duration-500 rounded-[2.5rem] overflow-hidden flex flex-col shadow-xl",
+                      exercise.completed 
+                        ? (isGroup ? "border-accent/40 bg-accent/5 opacity-90 shadow-accent/5" : "border-primary/40 bg-primary/5 opacity-90 shadow-primary/5") 
+                        : (isGroup ? "hover:border-accent/20 hover:bg-card/90" : "hover:border-primary/20 hover:bg-card/90")
+                    )}
+                  >
+                    <CardContent className="p-0 flex flex-col h-full">
+                      {/* Header */}
+                      <div className="bg-muted/40 p-5 flex items-center justify-between border-b border-border/40">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className={cn(
+                            "h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                            exercise.completed 
+                              ? (isGroup ? "bg-accent/20 text-accent" : "bg-primary/20 text-primary") 
+                              : "bg-muted/50 text-muted-foreground"
+                          )}>
+                            <Dumbbell className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className={cn(
+                              "font-bold text-base leading-tight truncate cursor-pointer transition-colors",
+                              exercise.completed && (isGroup ? "text-accent/80" : "text-primary/80"),
+                              isGroup ? "hover:text-accent" : "hover:text-primary"
+                            )} onClick={() => setLogExercise(exercise)}>
+                              {exercise.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              {exercise.is_to_failure && (
+                                <span className="text-[9px] font-black bg-destructive/10 text-destructive border border-destructive/20 px-2 py-0.5 rounded uppercase tracking-tighter">
+                                  Al fallo 🔥
+                                </span>
+                              )}
+                              {exercise.completed && (
+                                <span className={cn(
+                                  "text-[9px] font-black border px-2 py-0.5 rounded uppercase tracking-tighter",
+                                  isGroup ? "bg-accent/10 text-accent border-accent/20" : "bg-primary/10 text-primary border-primary/20"
+                                )}>
+                                  Listo
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ExerciseVideoButton exerciseName={exercise.name} />
+                          <Button 
+                            size="icon" variant="ghost" 
+                            className={cn(
+                              "h-10 w-10 rounded-xl text-muted-foreground transition-all",
+                              isGroup ? "hover:bg-accent/10 hover:text-accent" : "hover:bg-primary/10 hover:text-primary"
+                            )}
+                            onClick={() => setLogExercise(exercise)}
+                          >
+                            <ClipboardEdit className="h-5 w-5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Sets Table */}
+                      <div className="p-5 flex-1">
+                        <div className="grid grid-cols-[40px_1fr_1fr_50px] gap-3 px-2 mb-3 text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50">
+                          <div className="text-center">SET</div>
+                          <div className="text-center">KG</div>
+                          <div className="text-center">REPS</div>
+                          <div className="text-center">OK</div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {exerciseSets[exercise.id]?.map((set, idx) => (
+                            <div 
+                              key={set.id} 
+                              className={cn(
+                                "grid grid-cols-[40px_1fr_1fr_50px] items-center gap-3 p-1.5 rounded-2xl transition-all duration-300 border",
+                                set.completed 
+                                  ? (isGroup ? "bg-accent/5 border-accent/30" : "bg-primary/5 border-primary/30") 
+                                  : "bg-muted/20 border-border/30 hover:bg-muted/40"
+                              )}
+                            >
+                              <div className="text-xs font-black text-center text-muted-foreground/80">{idx + 1}</div>
+                              <div>
+                                <Input 
+                                  type="number" step="0.5" 
+                                  className="input-premium h-10 w-full text-center text-sm font-bold border-none bg-transparent hover:bg-muted/40 focus:bg-muted/60" 
+                                  value={set.weight} 
+                                  onChange={(e) => handleSetChange(exercise.id, set.id, "weight", e.target.value)} 
+                                  placeholder="-" 
+                                />
+                              </div>
+                              <div>
+                                <Input 
+                                  type="number" 
+                                  className="input-premium h-10 w-full text-center text-sm font-bold border-none bg-transparent hover:bg-muted/40 focus:bg-muted/60" 
+                                  value={set.reps} 
+                                  onChange={(e) => handleSetChange(exercise.id, set.id, "reps", e.target.value)} 
+                                  placeholder="-" 
+                                />
+                              </div>
+                              <div className="flex justify-center">
+                                <Checkbox 
+                                  checked={set.completed} 
+                                  onCheckedChange={(c) => handleSetComplete(exercise.id, set.id, !!c)} 
+                                  className={cn(
+                                    "h-7 w-7 rounded-lg transition-transform active:scale-90",
+                                    isGroup 
+                                      ? "data-[state=checked]:bg-accent data-[state=checked]:border-accent" 
+                                      : "data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                  )} 
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-6 flex justify-center">
+                          <Button 
+                            variant="ghost" size="sm" 
+                            className={cn(
+                              "btn-premium-outline h-10 px-6 rounded-full text-xs gap-2 border-dashed border-muted-foreground/30 text-muted-foreground transition-all",
+                              isGroup 
+                                ? "hover:text-accent hover:border-accent hover:border-solid" 
+                                : "hover:text-primary hover:border-primary hover:border-solid"
+                            )}
+                            onClick={() => handleAddSet(exercise.id)}
+                          >
+                            <Plus className="h-4 w-4" /> Añadir serie
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="container max-w-4xl mx-auto p-4 sm:p-6 pb-32 animate-in fade-in duration-750">
-      <div className="mb-10 text-center sm:text-left relative">
+      {/* Header */}
+      <div className="mb-8 text-center sm:text-left relative">
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-3 relative z-10">
           <h1 className="text-4xl sm:text-5xl font-display font-black tracking-tighter uppercase italic leading-none">
-            Mis <span className="text-primary italic-none tracking-normal">Rutinas</span>
+            Mi <span className="text-primary italic-none tracking-normal">Rutina</span>
           </h1>
           <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full w-fit mx-auto sm:mx-0">
             <Dumbbell className="h-3 w-3 text-primary" />
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Entrenamiento</span>
           </div>
         </div>
-        <p className="text-muted-foreground text-sm max-w-lg mx-auto sm:mx-0 font-medium leading-relaxed">
-          Tu plan de entrenamiento personalizado diseñado para maximizar tus resultados y potenciar tu rendimiento.
-        </p>
       </div>
 
-      <div className="space-y-10">
-        <Accordion 
-          type="single" 
-          collapsible
-          value={expandedSection} 
-          onValueChange={(v) => setExpandedSection(v)} 
-          className="w-full space-y-6 border-none"
-        >
-            <AccordionItem value="personal" className="border-none">
-              <div className={cn(
-                "group relative overflow-hidden rounded-[2.5rem] bg-white/[0.03] border border-white/10 transition-all duration-500",
-                expandedSection === "personal" ? "bg-white/[0.05] border-primary/30 shadow-2xl shadow-primary/5 scale-[1.01]" : "hover:bg-white/[0.06] hover:border-white/20"
-              )}>
-                <div className="p-6 sm:p-8 flex items-center gap-4 sm:gap-6">
-                  <div className={cn(
-                    "h-14 w-14 rounded-3xl flex items-center justify-center border-2 transition-all duration-500 shadow-xl",
-                    blockedRoutines.personal 
-                      ? "bg-white/5 border-white/10 text-muted-foreground/40" 
-                      : "bg-primary/20 border-primary/30 text-primary shadow-primary/20 group-hover:rotate-6"
-                  )}>
-                    <Dumbbell className="h-7 w-7" />
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h2 className={cn(
-                        "text-2xl sm:text-3xl font-display font-black tracking-tight uppercase transition-all duration-500 leading-none",
-                        blockedRoutines.personal ? "opacity-30 italic" : "opacity-100"
-                      )}>Rutina Personal</h2>
-                      {blockedRoutines.personal && (
-                        <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-white/10 opacity-30 px-2 py-0.5">Bloqueada</Badge>
-                      )}
-                    </div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">Personalizado para ti</p>
-                  </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+        {hasGroupRoutine && (
+          <div className="flex justify-center mb-6">
+            <TabsList className="bg-card/50 border border-border/50 rounded-full p-1 h-auto shadow-inner">
+              <TabsTrigger 
+                value="personal" 
+                className="rounded-full px-6 py-2.5 text-xs font-bold uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg transition-all"
+              >
+                Rutina Personal
+              </TabsTrigger>
+              <TabsTrigger 
+                value="group" 
+                className="rounded-full px-6 py-2.5 text-xs font-bold uppercase tracking-wider data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-lg transition-all"
+              >
+                Rutina Grupal
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        )}
 
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleBlock('personal');
-                      }}
-                      className={cn(
-                        "p-3 rounded-2xl transition-all duration-300 active:scale-90 shadow-lg",
-                        blockedRoutines.personal 
-                          ? "bg-primary text-white shadow-primary/20" 
-                          : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-primary border border-white/10"
-                      )}
-                    >
-                      {blockedRoutines.personal ? <Lock className="h-5 w-5" /> : <LockOpen className="h-5 w-5" />}
-                    </button>
-                    {!blockedRoutines.personal && (
-                      <AccordionTrigger 
-                        className={cn(
-                          "w-12 h-12 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:no-underline transition-all duration-300 flex items-center justify-center p-0",
-                          "[&>svg]:h-6 [&>svg]:w-6 [&>svg]:transition-transform [&>svg]:duration-500"
-                        )} 
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {!blockedRoutines.personal && (
-                  <AccordionContent className="p-0 border-t border-white/5 animate-in slide-in-from-top-4 duration-500">
-                    <div className="p-4 sm:p-8 space-y-8">
-                      <div className="grid grid-cols-7 gap-2 w-full px-1">
-                        {DAYS.map((day, i) => {
-                          const count = exercisesByDay[day]?.length || 0;
-                          const isSelected = selectedDay === day;
-                          return (
-                            <button
-                              key={day}
-                              onClick={() => setSelectedDay(day)}
-                              className={cn(
-                                "flex flex-col items-center justify-center h-20 rounded-2xl text-sm font-black border transition-all duration-300 group active:scale-95",
-                                isSelected
-                                  ? "bg-primary border-primary text-white shadow-xl shadow-primary/20 scale-105 z-10"
-                                  : count > 0 
-                                    ? "bg-primary/10 border-primary/40 text-primary shadow-lg shadow-primary/5 hover:bg-primary/20" 
-                                    : "bg-white/5 border-white/5 text-muted-foreground opacity-30 hover:opacity-50"
-                              )}
-                            >
-                              <span className={cn(
-                                "text-[10px] uppercase tracking-tighter mb-1.5 font-bold transition-colors",
-                                isSelected ? "text-white" : "text-muted-foreground/80"
-                              )}>{DAY_SHORT[i]}</span>
-                              {count > 0 && (
-                                <div className={cn(
-                                  "flex items-center justify-center h-6 w-6 rounded-xl text-[10px] font-black shadow-md transition-colors",
-                                  isSelected ? "bg-white text-primary" : "bg-primary text-white"
-                                )}>
-                                  {count}
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div key={`personal-${selectedDay}`} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
-                        {!exercisesByDay[selectedDay] || exercisesByDay[selectedDay].length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-12 px-6 text-center border-2 border-dashed border-white/10 rounded-3xl opacity-50">
-                            <Dumbbell className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                            <p className="text-sm font-medium text-muted-foreground">No tienes ejercicios asignados para el {selectedDay.toLowerCase()}</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] whitespace-nowrap">{selectedDay}</span>
-                              <div className="h-[1px] w-full bg-gradient-to-r from-primary/30 to-transparent" />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {exercisesByDay[selectedDay].map((ex) => (
-                                <div key={ex.id} className={cn(
-                                  "flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 transition-all duration-300 hover:bg-white/[0.07] hover:border-white/20 hover:scale-[1.02] shadow-xl group active:scale-[0.98]",
-                                  ex.completed && "border-primary/30 bg-primary/[0.03] opacity-90 shadow-primary/5"
-                                )}>
-                                  <div className={cn(
-                                    "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all duration-300 group-hover:rotate-6",
-                                    ex.completed 
-                                      ? "bg-primary/20 border-primary/30 text-primary shadow-lg shadow-primary/20" 
-                                      : "bg-white/5 border-white/10 text-muted-foreground group-hover:border-white/30"
-                                  )}>
-                                    {ex.completed ? <CheckCircle className="h-6 w-6" /> : <Dumbbell className="h-6 w-6" />}
-                                  </div>
-                                  <div className="flex-1 min-w-0 py-0.5">
-                                    <p className="text-base font-black truncate leading-none uppercase tracking-tight mb-1.5">{ex.name}</p>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-black text-muted-foreground bg-white/5 px-2.5 py-1 rounded-full border border-white/10 uppercase tracking-widest">
-                                        {ex.sets} SETS × {ex.reps} REPS
-                                      </span>
-                                      {ex.weight > 0 && (
-                                        <span className="text-xs font-black text-primary bg-primary/10 px-2 py-1 rounded-full border border-primary/20">
-                                          {ex.weight}KG
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex-shrink-0">
-                                    {ex.completed ? (
-                                      <Badge className="badge-status-pagado text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border-none shadow-lg">✓ HECHO</Badge>
-                                    ) : (
-                                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-[0.1em] text-muted-foreground/60 border-white/10 px-3 py-1 rounded-full bg-white/5">0%</Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </AccordionContent>
+        {/* Week Day Selector */}
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-10">
+          {DAYS.map((day, i) => {
+            const isSelected = selectedDay === day;
+            const isToday = day === today;
+            // Count exercises for this day (total)
+            const personalCount = exercises.filter(e => e.day === day).length;
+            const groupCount = groupExercises.filter(e => e.day === day).length;
+            const totalCount = personalCount + groupCount;
+            
+            return (
+              <button
+                key={day}
+                onClick={() => setSelectedDay(day)}
+                className={cn(
+                  "relative flex flex-col items-center justify-center h-16 sm:h-20 rounded-2xl text-sm font-black border transition-all duration-300 group active:scale-95",
+                  isSelected
+                    ? "bg-primary border-primary text-white shadow-xl shadow-primary/20 scale-105 z-10"
+                    : isToday
+                      ? "bg-primary/10 border-primary/40 text-primary shadow-lg shadow-primary/5 hover:bg-primary/20"
+                      : "bg-white/5 border-white/5 text-muted-foreground hover:bg-white/10"
                 )}
-              </div>
-            </AccordionItem>
-
-            {hasGroupRoutine && (
-              <AccordionItem value="group" className="border-none">
-                <div className={cn(
-                  "group relative overflow-hidden rounded-[2.5rem] bg-white/[0.03] border border-white/10 transition-all duration-500",
-                  expandedSection === "group" ? "bg-white/[0.05] border-accent/30 shadow-2xl shadow-accent/5 scale-[1.01]" : "hover:bg-accent/[0.02] hover:border-accent/20"
+              >
+                <span className={cn(
+                  "text-[10px] sm:text-xs uppercase tracking-tighter mb-1 font-bold transition-colors",
+                  isSelected ? "text-white" : isToday ? "text-primary" : "text-muted-foreground"
                 )}>
-                  <div className="p-6 sm:p-8 flex items-center gap-4 sm:gap-6">
-                    <div className={cn(
-                      "h-14 w-14 rounded-3xl flex items-center justify-center border-2 transition-all duration-500 shadow-xl",
-                      blockedRoutines.group 
-                        ? "bg-white/5 border-white/10 text-muted-foreground/40" 
-                        : "bg-accent/20 border-accent/30 text-accent shadow-accent/20 group-hover:rotate-[-6deg]"
-                    )}>
-                      <Users className="h-7 w-7" />
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h2 className={cn(
-                          "text-2xl sm:text-3xl font-display font-black tracking-tight uppercase transition-all duration-500 leading-none",
-                          blockedRoutines.group ? "opacity-30 italic" : "opacity-100"
-                        )}>Rutina de Grupo</h2>
-                        {blockedRoutines.group && (
-                          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-white/10 opacity-30 px-2 py-0.5">Bloqueada</Badge>
-                        )}
-                      </div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] opacity-60">Entrenamiento con tu equipo</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleBlock('group');
-                        }}
-                        className={cn(
-                          "p-3 rounded-2xl transition-all duration-300 active:scale-90 shadow-lg",
-                          blockedRoutines.group 
-                            ? "bg-accent text-white shadow-accent/20" 
-                            : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-accent border border-white/10"
-                        )}
-                      >
-                        {blockedRoutines.group ? <Lock className="h-5 w-5" /> : <LockOpen className="h-5 w-5" />}
-                      </button>
-                      {!blockedRoutines.group && (
-                        <AccordionTrigger 
-                          className={cn(
-                            "w-12 h-12 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:no-underline transition-all duration-300 flex items-center justify-center p-0",
-                            "[&>svg]:h-6 [&>svg]:w-6 [&>svg]:transition-transform [&>svg]:duration-500"
-                          )} 
-                        />
-                      )}
-                    </div>
+                  {DAY_SHORT[i]}
+                </span>
+                
+                {totalCount > 0 ? (
+                  <div className={cn(
+                    "flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 rounded-xl text-[9px] sm:text-[10px] font-black shadow-md transition-colors",
+                    isSelected ? "bg-white text-primary" : "bg-primary text-white"
+                  )}>
+                    {totalCount}
                   </div>
+                ) : (
+                  <div className="h-1 w-1 rounded-full bg-muted-foreground/30 mt-1" />
+                )}
+                {isToday && !isSelected && (
+                  <div className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-                  {!blockedRoutines.group && (
-                    <AccordionContent className="p-0 border-t border-white/5 animate-in slide-in-from-top-4 duration-500">
-                      <div className="p-4 sm:p-8 space-y-8">
-                        <div className="grid grid-cols-7 gap-2 w-full px-1">
-                          {DAYS.map((day, i) => {
-                            const count = groupExercisesByDay[day]?.length || 0;
-                            const isSelected = selectedDay === day;
-                            return (
-                              <button
-                                key={day}
-                                onClick={() => setSelectedDay(day)}
-                                className={cn(
-                                  "flex flex-col items-center justify-center h-20 rounded-2xl text-sm font-black border transition-all duration-300 group active:scale-95",
-                                  isSelected
-                                    ? "bg-accent border-accent text-white shadow-xl shadow-accent/20 scale-105 z-10"
-                                    : count > 0 
-                                      ? "bg-accent/10 border-accent/40 text-accent shadow-lg shadow-accent/5 hover:bg-accent/20" 
-                                      : "bg-white/5 border-white/5 text-muted-foreground opacity-30 hover:opacity-50"
-                                )}
-                              >
-                                <span className={cn(
-                                  "text-[10px] uppercase tracking-tighter mb-1.5 font-bold transition-colors",
-                                  isSelected ? "text-white" : "text-muted-foreground/80"
-                                )}>{DAY_SHORT[i]}</span>
-                                {count > 0 && (
-                                  <div className={cn(
-                                    "flex items-center justify-center h-6 w-6 rounded-xl text-[10px] font-black shadow-md transition-colors",
-                                    isSelected ? "bg-white text-accent" : "bg-accent text-white"
-                                  )}>
-                                    {count}
-                                  </div>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
+        {/* Rest Timer */}
+        <RestTimer />
 
-                        <div key={`group-${selectedDay}`} className="animate-in fade-in slide-in-from-bottom-3 duration-500">
-                          {!groupExercisesByDay[selectedDay] || groupExercisesByDay[selectedDay].length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 px-6 text-center border-2 border-dashed border-white/10 rounded-3xl opacity-50">
-                              <Users className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                              <p className="text-sm font-medium text-muted-foreground">No hay ejercicios grupales para el {selectedDay.toLowerCase()}</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] whitespace-nowrap">{selectedDay}</span>
-                                <div className="h-[1px] w-full bg-gradient-to-r from-accent/30 to-transparent" />
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {groupExercisesByDay[selectedDay].map((ex) => (
-                                  <div key={ex.id} className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 transition-all duration-300 hover:bg-white/[0.07] hover:border-white/20 hover:scale-[1.02] shadow-xl group active:scale-[0.98]">
-                                    <div className="h-12 w-12 rounded-2xl bg-accent/20 border-2 border-accent/30 flex items-center justify-center shrink-0 text-accent group-hover:rotate-6 transition-all duration-300 shadow-lg shadow-accent/20">
-                                      <Dumbbell className="h-6 w-6" />
-                                    </div>
-                                    <div className="flex-1 min-w-0 py-0.5">
-                                      <p className="text-base font-black truncate leading-none uppercase tracking-tight mb-1.5">{ex.name}</p>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black text-muted-foreground bg-white/5 px-2.5 py-1 rounded-full border border-white/10 uppercase tracking-widest">
-                                          {ex.sets} SETS × {ex.reps} REPS
-                                        </span>
-                                        {ex.weight > 0 && (
-                                          <span className="text-xs font-black text-accent bg-accent/10 px-2 py-1 rounded-full border border-accent/20">
-                                            {ex.weight}KG
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex-shrink-0">
-                                      <Badge variant="outline" className="badge-accent-tag text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border-none shadow-lg">GRUPAL</Badge>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  )}
-                </div>
-              </AccordionItem>
+        <TabsContent value="personal" className="focus-visible:outline-none animate-in fade-in duration-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-display font-black uppercase tracking-tight">Rutina Personal</h2>
+            <span className="text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/50">
+              {currentPersonalExs.filter(e => e.completed).length}/{currentPersonalExs.length} Completados
+            </span>
+          </div>
+          
+          {allPersonalCompleted && currentPersonalExs.length > 0 && (
+            <Card className="card-premium border-primary/20 bg-primary/5 rounded-[2rem] py-6 mb-6 shadow-lg shadow-primary/5">
+              <CardContent className="p-0 text-center space-y-2">
+                <Flame className="h-8 w-8 text-primary mx-auto mb-2 animate-bounce" />
+                <h3 className="text-lg font-black uppercase italic">¡Rutina Personal Finalizada!</h3>
+              </CardContent>
+            </Card>
+          )}
+
+          {renderExercises(currentPersonalExs, false)}
+        </TabsContent>
+
+        {hasGroupRoutine && (
+          <TabsContent value="group" className="focus-visible:outline-none animate-in fade-in duration-500">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-display font-black uppercase tracking-tight text-accent">Rutina de Grupo</h2>
+              <span className="text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/50">
+                {currentGroupExs.filter(e => e.completed).length}/{currentGroupExs.length} Completados
+              </span>
+            </div>
+
+            {allGroupCompleted && currentGroupExs.length > 0 && (
+              <Card className="card-premium border-accent/20 bg-accent/5 rounded-[2rem] py-6 mb-6 shadow-lg shadow-accent/5">
+                <CardContent className="p-0 text-center space-y-2">
+                  <Flame className="h-8 w-8 text-accent mx-auto mb-2 animate-bounce" />
+                  <h3 className="text-lg font-black uppercase italic text-accent">¡Rutina Grupal Finalizada!</h3>
+                </CardContent>
+              </Card>
             )}
-        </Accordion>
-      </div>
+
+            {renderExercises(currentGroupExs, true)}
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {logExercise && user && (
+        <DailyLogDialog
+          open={!!logExercise}
+          onClose={() => { setLogExercise(null); fetchExercises(); }}
+          exercise={logExercise}
+          studentId={user.uid}
+          trainerId={logExercise.trainer_id}
+        />
+      )}
     </div>
   );
 }

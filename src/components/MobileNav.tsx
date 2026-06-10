@@ -18,10 +18,8 @@ const trainerItems = [
 
 const studentItems = [
   { title: "Inicio", url: "/student/home", icon: Home },
-  { title: "Rutina de Hoy", url: "/student/today", icon: CalendarCheck },
-  { title: "Rutinas", url: "/student/routines", icon: Dumbbell },
+  { title: "Rutina", url: "/student/routines", icon: Dumbbell },
   { title: "Comidas", url: "/student/meals", icon: Utensils },
-  { title: "Encuestas", url: "/student/surveys", icon: ClipboardList },
   { title: "Progreso", url: "/student/progress", icon: Zap }
 ];
 

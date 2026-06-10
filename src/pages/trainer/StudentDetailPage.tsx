@@ -378,7 +378,14 @@ export default function StudentDetailPage() {
               <Input
                 type="date"
                 value={routineNextChange || ""}
-                onChange={(e) => handleUpdateCycleDates(routineAssignmentDate, e.target.value)}
+                onChange={(e) => {
+                  const today = new Date();
+                  const offset = today.getTimezoneOffset();
+                  const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+                  const todayStr = todayLocal.toISOString().split('T')[0];
+                  const assignDate = routineAssignmentDate || todayStr;
+                  handleUpdateCycleDates(assignDate, e.target.value);
+                }}
                 className="bg-background/50 border-white/10 h-10 text-sm font-medium focus:ring-primary/30 transition-all"
               />
             </div>

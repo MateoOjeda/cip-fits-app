@@ -133,10 +133,9 @@ export async function saveDayConfig(
 }
 
 export async function addExercise(exercise: NewExercise) {
-  if (!exercise.trainer_id || !exercise.student_id || !exercise.routine_id) {
-    console.error("Missing required IDs for exercise", exercise);
-    return null;
-  }
+  if (!exercise.trainer_id) throw new Error("ID de entrenador faltante.");
+  if (!exercise.student_id) throw new Error("ID de alumno faltante.");
+  if (!exercise.routine_id) throw new Error("ID de rutina faltante.");
   
   const docRef = await addDoc(collection(db, "exercises"), {
     ...exercise,

@@ -24,8 +24,6 @@ import {
   removeExercise as removeExerciseService,
   bulkRemoveExercises,
   logTrainerChange,
-  setRoutineNextChangeDate,
-  setRoutineCycleDates,
   addBiSerieChild,
   removeBiSerieChild,
   EXERCISE_TYPES,
@@ -322,7 +320,7 @@ export default function RoutinesPage() {
             pyramid_reps: null,
             exercise_type: "BI_SERIE",
             parent_exercise_id: newId,
-            routine_id: activeRoutineId || "default",
+            routine_id: routine.id,
           });
         }
       }
@@ -399,23 +397,6 @@ export default function RoutinesPage() {
     });
   };
 
-  const daysUntilChange = (() => {
-    if (!routineNextChange) return null;
-    const diff = Math.ceil((new Date(routineNextChange).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  })();
-
-  const handleSetNextChange = async (days: number) => {
-    if (!user || !selectedStudent) return;
-    try {
-      const dateStr = await setRoutineNextChangeDate(user.uid, selectedStudent, days);
-      setRoutineNextChange(dateStr);
-      toast.success(`Cambio de rutina programado en ${days} días`);
-      fetchData();
-    } catch (err) {
-      toast.error("Error al programar cambio de rutina");
-    }
-  };
 
   const student = students.find((s) => s.user_id === selectedStudent);
   const parentExercises = exercises.filter((e) => e.day === selectedDay && !e.parent_exercise_id);
@@ -947,85 +928,10 @@ export default function RoutinesPage() {
                   <div className="p-2 bg-primary/10 rounded-lg text-primary">
                     <CalendarClock className="h-5 w-5" />
                   </div>
-                  <CardTitle className="text-base uppercase tracking-tighter">Control de Ciclo</CardTitle>
+                  <CardTitle className="text-base uppercase tracking-tighter">Actividad</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                {!isGroupMode && (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-2">
-                          <CalendarClock className="h-3 w-3 text-primary/60" />
-                          Fecha de Asignación
-                        </Label>
-                        <Input
-                          type="date"
-                          value={routineAssignmentDate || ""}
-                          onChange={async (e) => {
-                            const val = e.target.value;
-                            setRoutineAssignmentDate(val);
-                            if (user && selectedStudent) {
-                              await setRoutineCycleDates(user.uid, selectedStudent, val, routineNextChange || "");
-                            }
-                          }}
-                          className="input-premium h-11 border-primary/10 bg-black/20 focus:border-primary/40"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-2">
-                          <Clock className="h-3 w-3 text-primary/60" />
-                          Próximo Cambio
-                        </Label>
-                        <Input
-                          type="date"
-                          value={routineNextChange || ""}
-                          onChange={async (e) => {
-                            const val = e.target.value;
-                            setRoutineNextChange(val);
-                            if (user && selectedStudent) {
-                              const today = new Date();
-                              const offset = today.getTimezoneOffset();
-                              const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
-                              const todayStr = todayLocal.toISOString().split('T')[0];
-                              const assignDate = routineAssignmentDate || todayStr;
-                              if (!routineAssignmentDate) {
-                                setRoutineAssignmentDate(assignDate);
-                              }
-                              await setRoutineCycleDates(user.uid, selectedStudent, assignDate, val);
-                            }
-                          }}
-                          className="input-premium h-11 border-primary/10 bg-black/20 focus:border-primary/40"
-                        />
-                      </div>
-                    </div>
-
-                    {daysUntilChange !== null && daysUntilChange <= 7 && (
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center animate-in zoom-in-95 duration-300">
-                        <p className="text-3xl font-display font-bold text-amber-500">{daysUntilChange}</p>
-                        <p className="text-[10px] uppercase font-bold text-amber-500/70 mt-1">
-                          {daysUntilChange === 1 ? "Día Restante" : "Días Restantes"}
-                        </p>
-                      </div>
-                    )}
-
-                    {daysUntilChange === null && (
-                      <div className="grid grid-cols-4 gap-2">
-                        {[7, 14, 21, 30].map((d) => (
-                          <Button
-                            key={d} size="sm" variant="outline"
-                            className="h-10 rounded-lg text-xs font-bold border-primary/20 hover:bg-primary hover:text-white transition-all"
-                            onClick={() => handleSetNextChange(d)}
-                          >
-                            {d}D
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 <div className="space-y-3">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Log de Cambios</Label>
                   <div className="p-4 rounded-2xl bg-black/20 border border-white/5 max-h-[150px] overflow-y-auto text-[10px] font-mono leading-relaxed hide-scrollbar">

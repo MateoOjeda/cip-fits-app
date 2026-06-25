@@ -141,11 +141,26 @@ export default function StudentDetailPage() {
       const qDiag = query(collection(db, "seguimiento_personal"), where("student_id", "==", studentId), orderBy("created_at", "desc"), limit(1));
       
       const [snapEx, archived, sResults, pSurveys, diagSnap] = await Promise.all([
-        getDocs(qEx),
-        fetchArchivedRoutines(user.uid, studentId),
-        fetchStudentSurveyResults(studentId),
-        fetchStudentPendingSurveys(studentId),
-        getDocs(qDiag)
+        getDocs(qEx).catch(err => {
+          console.error("Error fetching exercises:", err);
+          return { docs: [] };
+        }),
+        fetchArchivedRoutines(user.uid, studentId).catch(err => {
+          console.error("Error fetching archived routines:", err);
+          return [];
+        }),
+        fetchStudentSurveyResults(studentId).catch(err => {
+          console.error("Error fetching survey results:", err);
+          return [];
+        }),
+        fetchStudentPendingSurveys(studentId).catch(err => {
+          console.error("Error fetching pending surveys:", err);
+          return [];
+        }),
+        getDocs(qDiag).catch(err => {
+          console.error("Error fetching diagnostics (missing index?):", err);
+          return { docs: [], empty: true } as any;
+        })
       ]);
 
       setExercises(snapEx.docs.map(d => ({ id: d.id, ...d.data() } as Exercise)));

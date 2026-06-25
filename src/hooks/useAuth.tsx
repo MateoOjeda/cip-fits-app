@@ -35,13 +35,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
-      // Fetch role
-      const roleDoc = await getDoc(doc(db, "user_roles", userId));
+      setLoading(true);
+      let roleDoc = await getDoc(doc(db, "user_roles", userId));
+      
+      // Si no existe, podría ser que la cuenta se esté registrando en este momento.
+      // Reintentamos después de 1 segundo para esperar que terminen los setDoc iniciales.
+      if (!roleDoc.exists()) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        roleDoc = await getDoc(doc(db, "user_roles", userId));
+      }
+      
       const roleData = roleDoc.data();
       setRole((roleData?.role as AppRole) ?? null);
 
-      // Fetch profile
-      const profileDoc = await getDoc(doc(db, "profiles", userId));
+      let profileDoc = await getDoc(doc(db, "profiles", userId));
+      if (!profileDoc.exists()) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        profileDoc = await getDoc(doc(db, "profiles", userId));
+      }
+      
       const profileData = profileDoc.data();
       setDisplayName(profileData?.display_name ?? "");
     } catch (err) {

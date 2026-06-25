@@ -14,9 +14,9 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/user_roles/$(userId)).data.role;
     }
 
-    // Profiles: Everyone authenticated can read (to search/link), only owner can write
+    // Profiles: Everyone can read, only owner can write (public profile view)
     match /profiles/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isOwner(userId);
     }
 
@@ -35,12 +35,12 @@ service cloud.firestore {
       allow write: if isAuthenticated(); // Simplified to allow Trainers to link/unlink
     }
 
-    // Exercises
+    // Exercises: Read allowed if user is authenticated (trainer/student owner) OR if querying student exercises publicly
     match /exercises/{exerciseId} {
-      allow read: if isAuthenticated() && (
+      allow read: if (isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id || 
         request.auth.uid == resource.data.student_id
-      );
+      )) || resource.data.student_id != null;
       allow write: if isAuthenticated() && (
         request.auth.uid == request.resource.data.trainer_id ||
         request.auth.uid == resource.data.trainer_id
@@ -83,9 +83,9 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // Routine Day Config
+    // Routine Day Config: Read is public, write is authenticated
     match /routine_day_config/{configId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated();
     }
 

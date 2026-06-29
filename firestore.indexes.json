@@ -34,6 +34,15 @@
       ]
     },
     {
+      "collectionGroup": "student_meals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "student_id", "order": "ASCENDING" },
+        { "fieldPath": "trainer_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "training_groups",
       "queryScope": "COLLECTION",
       "fields": [

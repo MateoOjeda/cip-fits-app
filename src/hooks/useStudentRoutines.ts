@@ -11,6 +11,7 @@ import {
   autoUpdateRoutineCycle as autoUpdateRoutineCycleService,
   type Exercise,
   type DayConfig,
+  type NewExercise,
 } from "@/services/rutinas";
 import {
   getOrCreateActiveRoutine,
@@ -46,7 +47,21 @@ export function useStudentRoutines(trainerId?: string, studentId?: string) {
   });
 
   const addExerciseMutation = useMutation({
-    mutationFn: (exercise: Omit<Exercise, "id">) => addExerciseService(exercise as any),
+    mutationFn: async (exercise: Omit<NewExercise, "trainer_id" | "student_id" | "routine_id"> & { routine_id?: string }) => {
+      let rId = exercise.routine_id;
+      // Si no se provee routine_id, se obtiene o crea la rutina activa correspondiente al alumno
+      if (!rId) {
+        const { getOrCreateActiveRoutine: getOrCreateActiveRoutineFn } = await import("@/services/routineManager");
+        const activeRoutine = await getOrCreateActiveRoutineFn(trainerId!, "ALUMNO", studentId!);
+        rId = activeRoutine.id;
+      }
+      return addExerciseService({
+        ...exercise,
+        trainer_id: trainerId!,
+        student_id: studentId!,
+        routine_id: rId,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["routineData", trainerId, studentId] });
     },
@@ -67,12 +82,18 @@ export function useStudentRoutines(trainerId?: string, studentId?: string) {
   });
 
   const logChangeMutation = useMutation({
-    mutationFn: (message: string) => logTrainerChangeService(trainerId!, studentId!, message),
+    mutationFn: ({ changeType, description, entityId }: { changeType: string; description: string; entityId?: string }) =>
+      logTrainerChangeService(trainerId!, studentId!, changeType, description, entityId),
   });
 
   const addBiSerieChildMutation = useMutation({
-    mutationFn: ({ parentId, child }: { parentId: string; child: Omit<Exercise, "id"> }) =>
-      addBiSerieChildService(parentId, child as any),
+    mutationFn: async ({ parentId }: { parentId: string; child?: Omit<Exercise, "id"> }) => {
+      const parentExercise = routineDataQuery.data?.exercises.find((e) => e.id === parentId);
+      if (!parentExercise) {
+        throw new Error(`Parent exercise with ID ${parentId} not found in loaded routine data.`);
+      }
+      return addBiSerieChildService(parentExercise, trainerId!, studentId!);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["routineData", trainerId, studentId] });
     },

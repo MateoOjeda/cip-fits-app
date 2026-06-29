@@ -24,14 +24,14 @@ export function AppLayout() {
         <div className="h-screen flex w-full pb-[72px] md:pb-0 overflow-hidden relative">
           <AppSidebar />
           <div className="flex-1 flex flex-col min-w-0">
-            <header className="h-14 flex items-center justify-between border-b border-border/50 px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-10">
+            <header className="h-14 md:hidden flex items-center justify-between border-b border-border/50 px-4 bg-card/80 backdrop-blur-xl sticky top-0 z-10">
               {isTrainer ? (
                 <>
-                  <Button variant="ghost" size="icon" onClick={() => navigate("/trainer/notifications")} className="md:hidden text-muted-foreground hover:text-primary">
+                  <Button variant="ghost" size="icon" onClick={() => navigate("/trainer/notifications")} className="text-muted-foreground hover:text-primary">
                     <Bell className="h-5 w-5" />
                   </Button>
                   <div className="flex-1" />
-                  <div className="md:hidden">
+                  <div>
                     <UserSettingsDialog />
                   </div>
                 </>

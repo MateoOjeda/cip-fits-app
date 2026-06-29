@@ -39,76 +39,92 @@ interface TrainerInfo {
   display_name: string;
 }
 
+import { useQuery } from "@tanstack/react-query";
+
 export default function MyPlansPage() {
   const { user } = useAuth();
-  const [globalPlans, setGlobalPlans] = useState<GlobalPlan[]>([]);
-  const [planLevels, setPlanLevels] = useState<PlanLevel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [trainerInfo, setTrainerInfo] = useState<TrainerInfo | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-
-    try {
-      // Get student's linked trainer
+  // 1. Get student's linked trainer
+  const trainerLinkQuery = useQuery({
+    queryKey: ["studentTrainerLink", user?.uid],
+    queryFn: async () => {
+      if (!user) return null;
       const qLinks = query(collection(db, "trainer_students"), where("student_id", "==", user.uid), limit(1));
       const snapLinks = await getDocs(qLinks);
+      return snapLinks.empty ? null : snapLinks.docs[0].data();
+    },
+    enabled: !!user?.uid,
+  });
 
-      if (snapLinks.empty) {
-        setLoading(false);
-        return;
-      }
+  const trainerId = trainerLinkQuery.data?.trainer_id;
 
-      const trainerId = snapLinks.docs[0].data().trainer_id;
-
-      // Fetch Global Plans
+  // 2. Fetch Global Plans
+  const globalPlansQuery = useQuery<GlobalPlan[]>({
+    queryKey: ["globalPlans", trainerId],
+    queryFn: async () => {
+      if (!trainerId) return [];
       const qGlobal = query(collection(db, "global_plans"), where("trainer_id", "==", trainerId));
       const snapGlobal = await getDocs(qGlobal);
-      setGlobalPlans(snapGlobal.docs.map(d => ({ id: d.id, ...d.data() } as GlobalPlan)));
+      return snapGlobal.docs.map(d => ({ id: d.id, ...d.data() } as GlobalPlan));
+    },
+    enabled: !!trainerId,
+  });
 
-      // Fetch Plan Levels for student
+  // 3. Fetch Plan Levels for student
+  const planLevelsQuery = useQuery<PlanLevel[]>({
+    queryKey: ["planLevels", trainerId, user?.uid],
+    queryFn: async () => {
+      if (!trainerId || !user) return [];
       const qLevels = query(
         collection(db, "plan_levels"), 
         where("student_id", "==", user.uid), 
         where("trainer_id", "==", trainerId)
       );
       const snapLevels = await getDocs(qLevels);
-      setPlanLevels(snapLevels.docs.map(d => ({ id: d.id, ...d.data() } as PlanLevel)));
+      return snapLevels.docs.map(d => ({ id: d.id, ...d.data() } as PlanLevel));
+    },
+    enabled: !!trainerId && !!user?.uid,
+  });
 
-      // Fetch Trainer Profile
+  // 4. Fetch Trainer Profile
+  const trainerInfoQuery = useQuery<TrainerInfo | null>({
+    queryKey: ["trainerProfile", trainerId],
+    queryFn: async () => {
+      if (!trainerId) return null;
       const profSnap = await getDoc(doc(db, "profiles", trainerId));
-      if (profSnap.exists()) {
-        setTrainerInfo(profSnap.data() as TrainerInfo);
-      }
-    } catch (err) {
-      console.error("Error fetching plans data:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      return profSnap.exists() ? (profSnap.data() as TrainerInfo) : null;
+    },
+    enabled: !!trainerId,
+  });
 
   // Real-time updates with onSnapshot
   useEffect(() => {
-    if (!user) return;
+    if (!user || !trainerId) return;
     
-    // Listen for global_plans (ideally scoped by trainer, but for now we listen and re-fetch)
-    const unsubGlobal = onSnapshot(collection(db, "global_plans"), () => fetchData());
+    const unsubGlobal = onSnapshot(
+      query(collection(db, "global_plans"), where("trainer_id", "==", trainerId)), 
+      () => {
+        globalPlansQuery.refetch();
+      }
+    );
     const unsubLevels = onSnapshot(
-      query(collection(db, "plan_levels"), where("student_id", "==", user.uid)), 
-      () => fetchData()
+      query(collection(db, "plan_levels"), where("student_id", "==", user.uid), where("trainer_id", "==", trainerId)), 
+      () => {
+        planLevelsQuery.refetch();
+      }
     );
 
     return () => {
       unsubGlobal();
       unsubLevels();
     };
-  }, [user, fetchData]);
+  }, [user, trainerId]);
+
+  const globalPlans = globalPlansQuery.data || [];
+  const planLevels = planLevelsQuery.data || [];
+  const trainerInfo = trainerInfoQuery.data || null;
+  const loading = trainerLinkQuery.isLoading || globalPlansQuery.isLoading || planLevelsQuery.isLoading || trainerInfoQuery.isLoading;
 
   if (loading) {
     return (
@@ -144,15 +160,15 @@ export default function MyPlansPage() {
 
   if (mergedLevels.length === 0) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Mis Planes</h1>
-          <p className="text-muted-foreground text-sm mt-1">Planes asignados por tu entrenador</p>
+      <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+        <div className="border-b border-border/50 pb-5">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mis Planes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Planes asignados por tu entrenador</p>
         </div>
-        <Card className="card-glass">
+        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
           <CardContent className="p-8 text-center">
-            <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
+            <ClipboardList className="h-8 w-8 mx-auto text-muted-foreground/45 mb-2.5" />
+            <p className="text-xs text-muted-foreground font-medium">
               Aún no tienes planes asignados. Tu entrenador los configurará pronto.
             </p>
           </CardContent>
@@ -170,10 +186,10 @@ export default function MyPlansPage() {
     });
 
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Mis Planes</h1>
-          <p className="text-muted-foreground text-sm mt-1">Contenido desbloqueado por tu entrenador</p>
+      <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+        <div className="border-b border-border/50 pb-5">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mis Planes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Contenido desbloqueado por tu entrenador</p>
         </div>
         <PlanLevelDetail
           planType={activePlanType}
@@ -187,10 +203,10 @@ export default function MyPlansPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Mis Planes</h1>
-        <p className="text-muted-foreground text-sm mt-1">Seleccioná un plan para ver los niveles disponibles</p>
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      <div className="border-b border-border/50 pb-5">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Mis Planes</h1>
+        <p className="text-sm text-muted-foreground mt-1">Selecciona un plan para ver los niveles disponibles</p>
       </div>
       <div className="space-y-3">
         {PLAN_TYPES.map((pt) => {

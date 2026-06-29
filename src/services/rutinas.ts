@@ -83,9 +83,17 @@ export async function fetchRoutineData(trainerId: string, studentId: string) {
     where("student_id", "==", studentId)
   );
 
-  const [exSnap, daySnap] = await Promise.all([
+  // Fetch routine next change date from trainer_students link in parallel
+  const linkQuery = query(
+    collection(db, "trainer_students"), 
+    where("trainer_id", "==", trainerId), 
+    where("student_id", "==", studentId)
+  );
+
+  const [exSnap, daySnap, linkSnap] = await Promise.all([
     getDocs(exercisesQuery),
-    getDocs(dayConfigQuery)
+    getDocs(dayConfigQuery),
+    getDocs(linkQuery)
   ]);
 
   const exercises = exSnap.docs.map(d => ({ id: d.id, ...d.data() } as Exercise));
@@ -100,13 +108,6 @@ export async function fetchRoutineData(trainerId: string, studentId: string) {
     };
   });
 
-  // Fetch routine next change date from trainer_students link
-  const linkQuery = query(
-    collection(db, "trainer_students"), 
-    where("trainer_id", "==", trainerId), 
-    where("student_id", "==", studentId)
-  );
-  const linkSnap = await getDocs(linkQuery);
   const routineNextChange = linkSnap.docs.length > 0 ? linkSnap.docs[0].data().routine_next_change_date : null;
   const routineAssignmentDate = linkSnap.docs.length > 0 ? linkSnap.docs[0].data().routine_assignment_date : null;
 

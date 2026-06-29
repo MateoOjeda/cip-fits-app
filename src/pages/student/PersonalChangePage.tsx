@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Moon, Sun, Dumbbell, Briefcase, Sparkles, ChevronRight, ChevronLeft, Check, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const STEPS = [
   { title: "Hábitos de Sueño", icon: Moon, description: "Cuéntanos sobre tu rutina de descanso" },
@@ -152,9 +153,7 @@ export default function PersonalChangePage() {
       // Add trainer change notification
       await addDoc(collection(db, "trainer_changes"), {
         student_id: user.uid,
-        trainer_id: user.uid, // In this context specifically it seems they notify themselves? Or maybe it should be the trainer. 
-        // Based on original code: trainer_id: user.id (which is the student). 
-        // Likely because the student dashboard shows these notifications to the student.
+        trainer_id: user.uid,
         change_type: "personal_survey",
         description: existingId ? "Actualizó su encuesta de Cambio Personal" : "Completó su encuesta de Cambio Personal",
         created_at: new Date().toISOString()
@@ -174,89 +173,98 @@ export default function PersonalChangePage() {
   const progress = ((step + 1) / STEPS.length) * 100;
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    <div className="max-w-lg mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-primary/10 neon-glow">
-          <Sparkles className="h-6 w-6 text-primary" />
+        <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-primary/10">
+          <Sparkles className="h-5 w-5 text-primary" />
         </div>
-        <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Cambio Personal</h1>
-        <p className="text-sm text-muted-foreground">Cuéntanos sobre ti para personalizar tu plan</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Cambio Personal</h1>
+        <p className="text-xs text-muted-foreground">Completa tu información para personalizar tu plan</p>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex justify-between text-xs text-muted-foreground">
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
           <span>Paso {step + 1} de {STEPS.length}</span>
           <span>{Math.round(progress)}%</span>
         </div>
-        <Progress value={progress} className="h-2" />
+        <Progress value={progress} className="h-1.5" />
       </div>
 
-      <div className="flex gap-2 justify-center">
+      <div className="flex gap-2 justify-center overflow-x-auto py-1 hide-scrollbar">
         {STEPS.map((s, i) => (
           <button key={i} onClick={() => { if (i < step) setStep(i); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              i === step ? "bg-primary text-primary-foreground neon-glow" : i < step ? "bg-primary/20 text-primary cursor-pointer" : "bg-secondary text-muted-foreground"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+              i === step 
+                ? "bg-primary text-primary-foreground shadow-sm" 
+                : i < step 
+                  ? "bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer" 
+                  : "bg-muted text-muted-foreground opacity-60"
             }`}>
-            <s.icon className="h-3 w-3" />
+            <s.icon className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{s.title}</span>
           </button>
         ))}
       </div>
 
-      <Card className="card-glass neon-border">
-        <CardHeader className="pb-3">
+      <Card className="border border-border/50 bg-card rounded-2xl shadow-sm">
+        <CardHeader className="pb-3 border-b border-border/40 p-5">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center"><StepIcon className="h-5 w-5 text-primary" /></div>
-            <div><CardTitle className="text-base">{STEPS[step].title}</CardTitle><p className="text-xs text-muted-foreground">{STEPS[step].description}</p></div>
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <StepIcon className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-bold text-foreground leading-none">{STEPS[step].title}</CardTitle>
+              <p className="text-[11px] text-muted-foreground mt-1">{STEPS[step].description}</p>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-5">
           {step === 0 && (
             <>
-              <Field label="¿A qué hora te duermes normalmente?"><Input type="time" value={form.hora_dormir} onChange={(e) => set("hora_dormir", e.target.value)} /></Field>
-              <Field label="¿A qué hora te despiertas?"><Input type="time" value={form.hora_despertar} onChange={(e) => set("hora_despertar", e.target.value)} /></Field>
-              <Field label="¿Te cuesta levantarse? Describe tu dificultad"><Textarea value={form.dificultad_levantarse} onChange={(e) => set("dificultad_levantarse", e.target.value)} placeholder="Ej: Mucho, pongo 5 alarmas..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Cuál sería tu horario ideal para despertar?"><Input type="time" value={form.hora_ideal_despertar} onChange={(e) => set("hora_ideal_despertar", e.target.value)} /></Field>
+              <Field label="¿A qué hora te duermes normalmente?"><Input type="time" value={form.hora_dormir} onChange={(e) => set("hora_dormir", e.target.value)} className="h-10" /></Field>
+              <Field label="¿A qué hora te despiertas?"><Input type="time" value={form.hora_despertar} onChange={(e) => set("hora_despertar", e.target.value)} className="h-10" /></Field>
+              <Field label="¿Te cuesta levantarte? Describe tu dificultad"><Textarea value={form.dificultad_levantarse} onChange={(e) => set("dificultad_levantarse", e.target.value)} placeholder="Ej: Mucho, pongo 5 alarmas..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Cuál sería tu horario ideal para despertar?"><Input type="time" value={form.hora_ideal_despertar} onChange={(e) => set("hora_ideal_despertar", e.target.value)} className="h-10" /></Field>
             </>
           )}
           {step === 1 && (
             <>
-              <Field label="¿Desayunas al levantarte? ¿Qué sueles comer?"><Textarea value={form.desayuno_habito} onChange={(e) => set("desayuno_habito", e.target.value)} placeholder="Ej: Sí, como cereal con leche..." className="resize-none" rows={3} /></Field>
-              <Field label="¿Te bañas al levantarte o en otro momento?"><Textarea value={form.bano_levantarse} onChange={(e) => set("bano_levantarse", e.target.value)} placeholder="Ej: Me baño en la noche..." className="resize-none" rows={2} /></Field>
+              <Field label="¿Desayunas al levantarte? ¿Qué sueles comer?"><Textarea value={form.desayuno_habito} onChange={(e) => set("desayuno_habito", e.target.value)} placeholder="Ej: Sí, como cereal con leche..." className="resize-none text-xs rounded-xl" rows={3} /></Field>
+              <Field label="¿Te bañas al levantarte o en otro momento?"><Textarea value={form.bano_levantarse} onChange={(e) => set("bano_levantarse", e.target.value)} placeholder="Ej: Me baño en la noche..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
             </>
           )}
           {step === 2 && (
             <>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
-                <Label className="text-sm">¿Entrenas actualmente?</Label>
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/50 bg-muted/30">
+                <Label className="text-xs font-semibold text-foreground">¿Entrenas actualmente?</Label>
                 <Switch checked={form.entrena} onCheckedChange={(v) => set("entrena", v)} />
               </div>
-              <Field label="¿Qué tipo de entrenamiento haces o te gustaría hacer?"><Textarea value={form.tipo_entrenamiento} onChange={(e) => set("tipo_entrenamiento", e.target.value)} placeholder="Ej: Pesas, cardio, crossfit..." className="resize-none" rows={2} /></Field>
-              <Field label="¿En qué horarios entrenas o podrías entrenar?"><Textarea value={form.horario_entrenamiento} onChange={(e) => set("horario_entrenamiento", e.target.value)} placeholder="Ej: Después del trabajo, 6pm..." className="resize-none" rows={2} /></Field>
+              <Field label="¿Qué tipo de entrenamiento haces o te gustaría hacer?"><Textarea value={form.tipo_entrenamiento} onChange={(e) => set("tipo_entrenamiento", e.target.value)} placeholder="Ej: Pesas, cardio, crossfit..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿En qué horarios entrenas o podrías entrenar?"><Textarea value={form.horario_entrenamiento} onChange={(e) => set("horario_entrenamiento", e.target.value)} placeholder="Ej: Después del trabajo, 6pm..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
             </>
           )}
           {step === 3 && (
             <>
               <Field label="Peso Actual (kg)">
-                <Input type="number" value={form.peso_actual} onChange={(e) => set("peso_actual", e.target.value)} placeholder="Ej: 75.5" min="20" max="300" step="0.1" />
+                <Input type="number" value={form.peso_actual} onChange={(e) => set("peso_actual", e.target.value)} placeholder="Ej: 75.5" min="20" max="300" step="0.1" className="h-10" />
               </Field>
-              <Field label="¿Cuáles son tus obligaciones diarias?"><Textarea value={form.obligaciones_diarias} onChange={(e) => set("obligaciones_diarias", e.target.value)} placeholder="Ej: Trabajo de 8am a 5pm..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Qué horarios ocupan estas obligaciones?"><Textarea value={form.horarios_ocupados} onChange={(e) => set("horarios_ocupados", e.target.value)} placeholder="Ej: Lunes a viernes 8am-5pm..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Tienes personas o mascotas a tu cargo?"><Textarea value={form.personas_cargo} onChange={(e) => set("personas_cargo", e.target.value)} placeholder="Ej: Un hijo pequeño, un perro..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Qué tan organizado estás con tus comidas?"><Textarea value={form.organizacion_comidas} onChange={(e) => set("organizacion_comidas", e.target.value)} placeholder="Ej: No muy organizado..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Qué nuevos hábitos te gustaría incorporar?"><Textarea value={form.nuevos_habitos} onChange={(e) => set("nuevos_habitos", e.target.value)} placeholder="Ej: Meditar, leer..." className="resize-none" rows={2} /></Field>
-              <Field label="¿Cuánto tiempo dedicas a ti mismo/a?"><Textarea value={form.tiempo_para_si} onChange={(e) => set("tiempo_para_si", e.target.value)} placeholder="Ej: Casi nada..." className="resize-none" rows={2} /></Field>
+              <Field label="¿Cuáles son tus obligaciones diarias?"><Textarea value={form.obligaciones_diarias} onChange={(e) => set("obligaciones_diarias", e.target.value)} placeholder="Ej: Trabajo de 8am a 5pm..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Qué horarios ocupan estas obligaciones?"><Textarea value={form.horarios_ocupados} onChange={(e) => set("horarios_ocupados", e.target.value)} placeholder="Ej: Lunes a viernes 8am-5pm..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Tienes personas o mascotas a tu cargo?"><Textarea value={form.personas_cargo} onChange={(e) => set("personas_cargo", e.target.value)} placeholder="Ej: Un hijo pequeño, un perro..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Qué tan organizado estás con tus comidas?"><Textarea value={form.organizacion_comidas} onChange={(e) => set("organizacion_comidas", e.target.value)} placeholder="Ej: No muy organizado..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Qué nuevos hábitos te gustaría incorporar?"><Textarea value={form.nuevos_habitos} onChange={(e) => set("nuevos_habitos", e.target.value)} placeholder="Ej: Meditar, leer..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
+              <Field label="¿Cuánto tiempo dedicas a ti mismo/a?"><Textarea value={form.tiempo_para_si} onChange={(e) => set("tiempo_para_si", e.target.value)} placeholder="Ej: Casi nada..." className="resize-none text-xs rounded-xl" rows={2} /></Field>
             </>
           )}
         </CardContent>
       </Card>
 
       <div className="flex gap-3">
-        {step > 0 && <Button variant="outline" onClick={prev} className="flex-1 gap-2"><ChevronLeft className="h-4 w-4" /> Anterior</Button>}
+        {step > 0 && <Button variant="outline" onClick={prev} className="flex-1 gap-1.5 h-10 rounded-xl text-xs font-semibold"><ChevronLeft className="h-4 w-4" /> Anterior</Button>}
         {step < STEPS.length - 1 ? (
-          <Button onClick={next} className="flex-1 gap-2">Siguiente <ChevronRight className="h-4 w-4" /></Button>
+          <Button onClick={next} className="flex-1 gap-1.5 h-10 rounded-xl text-xs font-semibold">Siguiente <ChevronRight className="h-4 w-4" /></Button>
         ) : (
-          <Button onClick={submit} disabled={saving} className="flex-1 gap-2">
+          <Button onClick={submit} disabled={saving} className="flex-1 gap-1.5 h-10 rounded-xl text-xs font-semibold">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {saving ? "Guardando..." : existingId ? "Actualizar" : "Enviar"}
           </Button>
@@ -269,7 +277,7 @@ export default function PersonalChangePage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-sm text-foreground">{label}</Label>
+      <Label className="text-xs font-semibold text-foreground">{label}</Label>
       {children}
     </div>
   );

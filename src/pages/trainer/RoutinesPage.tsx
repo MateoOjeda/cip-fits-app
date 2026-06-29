@@ -457,15 +457,15 @@ export default function RoutinesPage() {
 
   if (!isGroupMode && students.length === 0) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Creador de Rutinas</h1>
-          <p className="text-muted-foreground text-sm mt-1">Asigna ejercicios a tus alumnos</p>
+      <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+        <div className="border-b border-border/50 pb-5">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Creador de Rutinas</h1>
+          <p className="text-sm text-muted-foreground mt-1">Asigna ejercicios a tus alumnos</p>
         </div>
-        <Card className="card-glass">
+        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
           <CardContent className="p-8 text-center">
-            <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Primero vincula alumnos en la sección "Mis Alumnos".</p>
+            <Dumbbell className="h-8 w-8 mx-auto text-muted-foreground/45 mb-2.5" />
+            <p className="text-xs text-muted-foreground font-medium">Primero vincula alumnos en la sección "Mis Alumnos".</p>
           </CardContent>
         </Card>
       </div>
@@ -480,25 +480,27 @@ export default function RoutinesPage() {
   };
 
   return (
-    <div className="container-responsive space-y-6">
+    <div className="max-w-7xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* Header section with back button */}
-      <div className="flex items-center gap-4">
-        {(selectedStudent || isGroupMode) && (
-          <Button
-            variant="ghost" size="icon"
-            onClick={handleBackToList}
-            className="rounded-full hover:bg-accent/10 text-accent transition-all duration-300 hover:scale-110"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </Button>
-        )}
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-display font-bold tracking-tight neon-text uppercase leading-none truncate">
-            {isGroupMode ? `Rutina de Grupo: ${groupName}` : "Crear Rutina"}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {isGroupMode ? "Gestión de ejercicios colectivos" : "Configuración personalizada de entrenamiento"}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div className="flex items-center gap-4">
+          {(selectedStudent || isGroupMode) && (
+            <Button
+              variant="ghost" size="icon"
+              onClick={handleBackToList}
+              className="h-9 w-9 rounded-lg"
+            >
+              <ArrowLeft className="h-4.5 w-4.5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground leading-none">
+              {isGroupMode ? `Rutina de Grupo: ${groupName}` : "Crear Rutina"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1.5">
+              {isGroupMode ? "Gestión de ejercicios colectivos" : "Configuración personalizada de entrenamiento"}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -521,17 +523,17 @@ export default function RoutinesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-[70vh]">
           {/* Main Content Area */}
           <div className="lg:col-span-8 space-y-6">
-            <Card className="card-premium overflow-hidden border-accent/20">
-              <CardHeader className="p-6 pb-2 border-b border-white/5 bg-accent/5">
+            <Card className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-2">
-                    <div className="p-2 bg-accent/10 rounded-lg text-accent">
-                      <Dumbbell className="h-5 w-5" />
+                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                      <Dumbbell className="h-4.5 w-4.5" />
                     </div>
-                    <CardTitle className="text-lg">Configuración de Rutina</CardTitle>
+                    <CardTitle className="text-sm font-bold text-foreground">Configuración de Rutina</CardTitle>
                   </div>
                   {!isGroupMode && selectedStudent && (
-                    <Badge variant="outline" className="badge-accent-tag">
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold rounded-md px-2 py-0.5 shadow-none">
                       Alumno: {students.find(s => s.user_id === selectedStudent)?.display_name || "Cargando..."}
                     </Badge>
                   )}
@@ -586,17 +588,17 @@ export default function RoutinesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Left: MUSCULAR CONFIG & FORM */}
                       <div className="space-y-6">
-                        <Card className="card-premium border-primary/20 bg-primary/5">
+                        <Card className="border border-border/50 bg-muted/20 rounded-xl shadow-sm">
                           <CardContent className="p-4 space-y-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                               Músculos {selectedDay}
                             </p>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Principal</Label>
                                 <Select value={currentDayConfig.body_part_1 || "none"} onValueChange={(v) => handleSaveDayConfig("body_part_1", v)}>
-                                  <SelectTrigger className="input-premium py-1.5 h-10 border-border/40"><SelectValue placeholder="Primario" /></SelectTrigger>
+                                  <SelectTrigger className="py-1.5 h-10 border-border/60"><SelectValue placeholder="Primario" /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">— Ninguno —</SelectItem>
                                     {BODY_PARTS.map((bp) => <SelectItem key={bp} value={bp}>{bp}</SelectItem>)}
@@ -606,7 +608,7 @@ export default function RoutinesPage() {
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Secundario</Label>
                                 <Select value={currentDayConfig.body_part_2 || "none"} onValueChange={(v) => handleSaveDayConfig("body_part_2", v)}>
-                                  <SelectTrigger className="input-premium py-1.5 h-10 border-border/40"><SelectValue placeholder="Secundario" /></SelectTrigger>
+                                  <SelectTrigger className="py-1.5 h-10 border-border/60"><SelectValue placeholder="Secundario" /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">— Ninguno —</SelectItem>
                                     {BODY_PARTS.filter((bp) => bp !== currentDayConfig.body_part_1).map((bp) => (
@@ -619,10 +621,10 @@ export default function RoutinesPage() {
                           </CardContent>
                         </Card>
 
-                        <Card className="card-premium border-primary/20">
+                        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
                           <CardHeader className="p-5 pb-2">
-                            <CardTitle className="text-base flex items-center gap-2">
-                              <Users className="h-6 w-6 text-primary" />
+                            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                              <Users className="h-4.5 w-4.5 text-primary" />
                               Nuevo Ejercicio
                             </CardTitle>
                           </CardHeader>
@@ -631,7 +633,7 @@ export default function RoutinesPage() {
                               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Ejercicio</Label>
                               {availableExercises.length > 0 ? (
                                 <Select value={form.name} onValueChange={(v) => setForm({ ...form, name: v })}>
-                                  <SelectTrigger className="input-premium h-11 border-border/40"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                  <SelectTrigger className="h-10 border-border/60"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                                   <SelectContent>
                                     {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
                                   </SelectContent>
@@ -641,7 +643,7 @@ export default function RoutinesPage() {
                                   placeholder={currentDayConfig.body_part_1 ? "Escribir nombre..." : "Configura grupo muscular"}
                                   value={form.name}
                                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                  className="input-premium h-11 border-border/40"
+                                  className="h-10 border-border/60 text-xs"
                                   disabled={!currentDayConfig.body_part_1}
                                 />
                               )}
@@ -724,17 +726,17 @@ export default function RoutinesPage() {
                                     placeholder="Reps: 12-10-8-10-12"
                                     value={form.pyramidReps}
                                     onChange={(e) => setForm({ ...form, pyramidReps: e.target.value })}
-                                    className="input-premium text-xs h-9"
+                                    className="text-xs h-9"
                                   />
                                 </div>
                               )}
                             </div>
 
                             {/* BI SERIE Section */}
-                            <div className="p-4 rounded-2xl bg-accent/5 border border-accent/20 space-y-4">
-                              <div className="flex items-center justify-between p-2">
+                            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-4">
+                              <div className="flex items-center justify-between p-1">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-accent tracking-tight">BI SERIE</span>
+                                  <span className="text-xs font-bold text-primary tracking-wider uppercase">Bi Serie</span>
                                   <span className="text-[10px] text-muted-foreground">Bi-serie vinculada</span>
                                 </div>
                                 <Switch checked={biSerieEnabled} onCheckedChange={(checked) => {
@@ -744,32 +746,32 @@ export default function RoutinesPage() {
                               </div>
 
                               {biSerieEnabled && (
-                                <div className="space-y-4 pl-3 border-l-2 border-accent/30 animate-in slide-in-from-left-2">
+                                <div className="space-y-4 pl-3 border-l border-primary/30 animate-in slide-in-from-left-2">
                                   <div className="space-y-1">
                                     <Label className="text-[10px] uppercase text-muted-foreground">Ejercicio Complementario</Label>
                                     {availableExercises.length > 0 ? (
                                       <Select value={biForm.name} onValueChange={(v) => setBiForm({ ...biForm, name: v })}>
-                                        <SelectTrigger className="input-premium h-10 border-accent/20"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
+                                        <SelectTrigger className="h-10 border-border/60"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
                                         <SelectContent>
                                           {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
                                         </SelectContent>
                                       </Select>
                                     ) : (
-                                      <Input placeholder="Escribir..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="input-premium h-10 border-accent/20" />
+                                      <Input placeholder="Escribir..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="h-10 border-border/60 text-xs" />
                                     )}
                                   </div>
                                   <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
                                       <Label className="text-[10px] uppercase text-muted-foreground">Reps</Label>
-                                      <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="input-premium h-10 border-accent/20" disabled={biForm.isToFailure} />
+                                      <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="h-10 border-border/60 text-xs" disabled={biForm.isToFailure} />
                                     </div>
                                     <div className="flex flex-col gap-1.5 justify-end pb-1 px-1">
                                       <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-medium">Al Fallo</span>
+                                        <span className="text-[11px] font-semibold text-muted-foreground">Al Fallo</span>
                                         <Switch checked={biForm.isToFailure} onCheckedChange={(checked) => setBiForm({ ...biForm, isToFailure: checked, reps: checked ? "" : biForm.reps })} className="scale-75 origin-right" />
                                       </div>
                                       <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-medium">Drop Set</span>
+                                        <span className="text-[11px] font-semibold text-muted-foreground">Drop Set</span>
                                         <Switch checked={biForm.isDropset} onCheckedChange={(checked) => setBiForm({ ...biForm, isDropset: checked })} className="scale-75 origin-right" />
                                       </div>
                                     </div>
@@ -778,8 +780,8 @@ export default function RoutinesPage() {
                               )}
                             </div>
 
-                            <Button onClick={handleAdd} className="btn-premium-primary w-full h-12 shadow-xl" disabled={!currentDayConfig.body_part_1}>
-                              <Plus className="h-5 w-5 mr-2" /> Agregar Ejercicio
+                            <Button onClick={handleAdd} className="bg-primary hover:bg-primary/90 text-primary-foreground w-full h-11 rounded-xl font-semibold shadow-sm" disabled={!currentDayConfig.body_part_1}>
+                              <Plus className="h-4 w-4 mr-2" /> Agregar Ejercicio
                             </Button>
                           </CardContent>
                         </Card>
@@ -787,20 +789,20 @@ export default function RoutinesPage() {
 
                       {/* Right: EXERCISE LIST */}
                       <div className="space-y-6">
-                        <Card className="card-premium overflow-hidden border-primary/20">
-                          <CardHeader className="p-5 pb-3 border-b border-white/5 bg-primary/5">
+                        <Card className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
+                          <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
                             <div className="flex items-center justify-between gap-4">
-                              <CardTitle className="text-base flex items-center gap-2">
+                              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                                 <div className="p-1.5 bg-primary/10 rounded-md">
-                                  <Dumbbell className="h-4 w-4 text-primary" />
+                                  <Dumbbell className="h-4.5 w-4.5 text-primary" />
                                 </div>
                                 {selectedDay}
-                                {combinedBodyPart && <Badge variant="outline" className="ml-1 border-primary/30 text-[9px] uppercase">{combinedBodyPart}</Badge>}
+                                {combinedBodyPart && <Badge variant="outline" className="ml-1 border-primary/20 text-[9px] uppercase font-bold bg-primary/5 text-primary">{combinedBodyPart}</Badge>}
                               </CardTitle>
                               {selectedIds.size > 0 && (
                                 <Button
                                   variant="destructive" size="sm"
-                                  className="h-8 px-3 rounded-lg text-xs"
+                                  className="h-8 px-3 rounded-lg text-xs font-semibold"
                                   onClick={() => setShowDeleteConfirm(true)}
                                   disabled={deleting}
                                 >
@@ -812,13 +814,13 @@ export default function RoutinesPage() {
                           <CardContent className="p-4 overflow-y-auto max-h-[700px] hide-scrollbar">
                             {loadingExercises ? (
                               <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-                                <p className="text-xs text-muted-foreground font-medium animate-pulse">Sincronizando sesión...</p>
+                                <Loader2 className="h-7 w-7 animate-spin text-primary/40" />
+                                <p className="text-xs text-muted-foreground font-semibold animate-pulse">Sincronizando sesión...</p>
                               </div>
                             ) : parentExercises.length === 0 ? (
-                              <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 opacity-40">
-                                <Dumbbell className="h-12 w-12" />
-                                <p className="text-sm font-medium">No hay ejercicios cargados</p>
+                              <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 opacity-45">
+                                <Dumbbell className="h-10 w-10 text-muted-foreground/60" />
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">No hay ejercicios cargados</p>
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 gap-3">
@@ -828,15 +830,15 @@ export default function RoutinesPage() {
                                   return (
                                     <div key={ex.id} className="group/item">
                                       <div className={cn(
-                                        "flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 border",
+                                        "flex items-center gap-3 p-3.5 rounded-xl transition-all duration-200 border",
                                         isSelected
-                                          ? "bg-primary/10 border-primary/40 shadow-inner"
-                                          : "bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10"
+                                          ? "bg-primary/5 border-primary/30 shadow-sm"
+                                          : "bg-muted/20 border-border/50 hover:bg-muted/40 hover:border-border/60"
                                       )}>
                                         <Checkbox
                                           checked={isSelected}
                                           onCheckedChange={() => toggleSelect(ex.id)}
-                                          className="h-5 w-5 rounded-md border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                          className="h-4.5 w-4.5 rounded-md border-border/60 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                         />
                                         <div className="flex-1 min-w-0">
                                           <p className="font-bold text-sm tracking-tight truncate">{ex.name}</p>

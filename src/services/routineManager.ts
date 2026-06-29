@@ -144,7 +144,6 @@ export async function assignGroupRoutineToStudent(
   studentId: string,
   groupId: string // Not used for copying anymore, kept for backwards compatibility in function signature
 ): Promise<void> {
-  // 1. Archive ANY current active individual routine for this student
   // We no longer copy exercises. The student UI dynamically fetches group_exercises
   // based on their training_group_members record. This prevents data duplication
   // and keeps the student exactly in sync with the group routine dynamically.
@@ -156,21 +155,33 @@ export async function assignGroupRoutineToStudent(
     where("target_id", "==", studentId),
     where("status", "==", "ACTIVA")
   );
-  const activeSnap = await getDocs(qActive);
-  
-  if (!activeSnap.empty) {
-    const batchArch = writeBatch(db);
-    activeSnap.docs.forEach(d => batchArch.update(d.ref, { status: "ARCHIVADA" }));
-    await batchArch.commit();
-  }
 
-  // 2. Automatically update routine cycle dates to keep the range active
   const qLink = query(
     collection(db, "trainer_students"),
     where("trainer_id", "==", trainerId),
     where("student_id", "==", studentId)
   );
-  const linkSnap = await getDocs(qLink);
+
+  // Fetch both active routines and link data in parallel
+  const [activeSnap, linkSnap] = await Promise.all([
+    getDocs(qActive),
+    getDocs(qLink)
+  ]);
+
+  const batch = writeBatch(db);
+  let hasWrites = false;
+
+  // 1. Archive ANY current active individual routine for this student
+  if (!activeSnap.empty) {
+    activeSnap.docs.forEach(d => {
+      if (d.data().status !== "ARCHIVADA") {
+        batch.update(d.ref, { status: "ARCHIVADA" });
+        hasWrites = true;
+      }
+    });
+  }
+
+  // 2. Automatically update routine cycle dates to keep the range active
   if (!linkSnap.empty) {
     const docRef = linkSnap.docs[0].ref;
     const data = linkSnap.docs[0].data();
@@ -180,9 +191,10 @@ export async function assignGroupRoutineToStudent(
     const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
     const todayStr = todayLocal.toISOString().split('T')[0];
     
-    const updates: any = {
-      routine_assignment_date: todayStr
-    };
+    const updates: any = {};
+    if (data.routine_assignment_date !== todayStr) {
+      updates.routine_assignment_date = todayStr;
+    }
     
     const currentNextChange = data.routine_next_change_date;
     const isFuture = currentNextChange && new Date(currentNextChange) > today;
@@ -190,10 +202,20 @@ export async function assignGroupRoutineToStudent(
     if (!isFuture) {
       const nextChange = new Date(today.getTime() - (offset * 60 * 1000));
       nextChange.setDate(nextChange.getDate() + 30);
-      updates.routine_next_change_date = nextChange.toISOString().split('T')[0];
+      const nextChangeStr = nextChange.toISOString().split('T')[0];
+      if (data.routine_next_change_date !== nextChangeStr) {
+        updates.routine_next_change_date = nextChangeStr;
+      }
     }
     
-    await updateDoc(docRef, updates);
+    if (Object.keys(updates).length > 0) {
+      batch.update(docRef, updates);
+      hasWrites = true;
+    }
+  }
+
+  if (hasWrites) {
+    await batch.commit();
   }
 }
 

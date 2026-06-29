@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from "react";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import { 
   onAuthStateChanged, 
@@ -18,9 +18,9 @@ interface AuthContextType {
   role: AppRole | null;
   loading: boolean;
   displayName: string;
-  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: (role?: AppRole) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
 }
@@ -32,42 +32,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
+  
+  // Referencia mutable para rastrear la petición activa y evitar race conditions
+  const activeFetchId = useRef<number>(0);
 
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string, fetchId: number) => {
     try {
       setLoading(true);
-      let roleDoc = await getDoc(doc(db, "user_roles", userId));
       
-      // Si no existe, podría ser que la cuenta se esté registrando en este momento.
-      // Reintentamos después de 1 segundo para esperar que terminen los setDoc iniciales.
-      if (!roleDoc.exists()) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        roleDoc = await getDoc(doc(db, "user_roles", userId));
-      }
-      
-      const roleData = roleDoc.data();
-      setRole((roleData?.role as AppRole) ?? null);
+      const [roleDoc, profileDoc] = await Promise.all([
+        getDoc(doc(db, "user_roles", userId)),
+        getDoc(doc(db, "profiles", userId))
+      ]);
 
-      let profileDoc = await getDoc(doc(db, "profiles", userId));
-      if (!profileDoc.exists()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        profileDoc = await getDoc(doc(db, "profiles", userId));
-      }
-      
+      // Descartar silenciosamente si hay una nueva petición o el usuario se deslogueó
+      if (activeFetchId.current !== fetchId) return;
+
+      const roleData = roleDoc.data();
       const profileData = profileDoc.data();
+
+      setRole((roleData?.role as AppRole) ?? null);
       setDisplayName(profileData?.display_name ?? "");
     } catch (err) {
-      console.error("Error fetching user data:", err);
+      if (activeFetchId.current === fetchId) {
+        console.error("Error fetching user data:", err);
+      }
     } finally {
-      setLoading(false);
+      if (activeFetchId.current === fetchId) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      // Incrementar el ID de petición para invalidar cualquier fetch anterior en vuelo
+      const currentFetchId = ++activeFetchId.current;
+      
       if (firebaseUser) {
-        fetchUserData(firebaseUser.uid);
+        fetchUserData(firebaseUser.uid, currentFetchId);
       } else {
         setRole(null);
         setDisplayName("");
@@ -78,20 +82,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, name: string, role: AppRole) => {
+  const signUp = async (email: string, password: string, name: string) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser = userCredential.user;
 
-      // Create role and profile in Firestore
       await Promise.all([
-        setDoc(doc(db, "user_roles", newUser.uid), { role, user_id: newUser.uid }),
+        setDoc(doc(db, "user_roles", newUser.uid), { role: "student", user_id: newUser.uid }),
         setDoc(doc(db, "profiles", newUser.uid), { 
           display_name: name, 
           user_id: newUser.uid,
           created_at: new Date().toISOString()
         })
       ]);
+
+      // Al crear los docs, actualizamos el estado e invalidamos el fetch de onAuthStateChanged
+      // que pudo haber consultado la DB antes de que los documentos existieran.
+      const currentFetchId = ++activeFetchId.current;
+      setRole("student");
+      setDisplayName(name);
+      setLoading(false);
 
       return { error: null };
     } catch (err) {
@@ -108,17 +118,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithGoogle = async (preferredRole: AppRole = "student") => {
+  const signInWithGoogle = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Check if user already has a role
       const roleDoc = await getDoc(doc(db, "user_roles", user.uid));
       if (!roleDoc.exists()) {
-        // New user from Google, assign preferred role
         await Promise.all([
-          setDoc(doc(db, "user_roles", user.uid), { role: preferredRole, user_id: user.uid }),
+          setDoc(doc(db, "user_roles", user.uid), { role: "student", user_id: user.uid }),
           setDoc(doc(db, "profiles", user.uid), { 
             display_name: user.displayName || "Usuario", 
             user_id: user.uid,
@@ -126,6 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             created_at: new Date().toISOString()
           })
         ]);
+        
+        // Similar a signUp, invalidamos el fetch en vuelo y actualizamos el estado
+        const currentFetchId = ++activeFetchId.current;
+        setRole("student");
+        setDisplayName(user.displayName || "Usuario");
+        setLoading(false);
       }
       return { error: null };
     } catch (err) {
@@ -134,10 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Al hacer signOut manual, incrementamos el contador para abortar peticiones en vuelo
+    ++activeFetchId.current;
     await firebaseSignOut(auth);
     setUser(null);
     setRole(null);
     setDisplayName("");
+    setLoading(false);
   };
 
   const resetPassword = async (email: string) => {

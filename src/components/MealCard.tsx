@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Utensils, ClipboardList, Info, Sparkles, CheckCircle2 } from "lucide-react";
+import { Utensils, ClipboardList, Info, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MealOption {
@@ -19,23 +18,23 @@ interface MealCardProps {
 export function MealCard({ title, ingredients, options, date, className }: MealCardProps) {
   return (
     <Card className={cn(
-      "card-premium overflow-hidden shadow-2xl transition-all duration-500 hover:scale-[1.01] hover:border-primary/30",
+      "border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden",
       className
     )}>
-      <CardHeader className="relative p-6 pb-2">
-        <div className="absolute top-0 right-0 p-4 opacity-[0.03]">
-          <Utensils className="h-24 w-24 -rotate-12" />
+      <CardHeader className="relative p-5 pb-2">
+        <div className="absolute top-0 right-0 p-4 opacity-[0.02]">
+          <Utensils className="h-20 w-20 -rotate-12" />
         </div>
         <div className="flex items-center gap-3 relative z-10">
-          <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-lg shadow-primary/5">
-            <Utensils className="h-5 w-5 text-primary" />
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 shadow-sm">
+            <Utensils className="h-4.5 w-4.5 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-xl font-display font-bold tracking-tight uppercase leading-none mb-1 text-foreground">
+            <CardTitle className="text-base font-bold tracking-tight text-foreground">
               {title}
             </CardTitle>
             {date && (
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                 Planificado para {date}
               </p>
             )}
@@ -43,42 +42,39 @@ export function MealCard({ title, ingredients, options, date, className }: MealC
         </div>
       </CardHeader>
 
-      <CardContent className="p-6 pt-4 space-y-6">
+      <CardContent className="p-5 pt-3 space-y-5">
         {/* Ingredients Section */}
         {ingredients && (
-          <div className="space-y-3 p-4 rounded-2xl bg-muted/30 border border-border/50 relative overflow-hidden group transition-colors hover:bg-muted/40">
-            <div className="flex items-center gap-2 mb-1">
-              <ClipboardList className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">Ingredientes</span>
+          <div className="space-y-2 p-3.5 rounded-xl bg-muted/40 border border-border/40 relative overflow-hidden transition-colors">
+            <div className="flex items-center gap-1.5">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Ingredientes</span>
             </div>
-            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap pl-1 font-medium">
+            <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap pl-1">
               {ingredients}
             </p>
-            <div className="absolute -bottom-2 -right-2 opacity-[0.03] scale-150 transition-transform group-hover:rotate-12 duration-500">
-               <Sparkles className="h-12 w-12" />
-            </div>
           </div>
         )}
 
         {/* Options / Preparation Section */}
         {options && options.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <Info className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">Opciones / Preparación</span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 px-1">
+              <Info className="h-4 w-4 text-primary" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Variantes / Preparación</span>
             </div>
             <div className="space-y-3">
               {options.map((opt, i) => (
-                <div key={i} className="relative pl-6 py-1 group">
-                  <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-primary/40 via-primary/10 to-transparent rounded-full" />
-                  <div className="absolute left-[-4px] top-2 h-2 w-2 rounded-full bg-primary shadow-lg shadow-primary/40 group-hover:scale-125 transition-transform" />
-                  <div className="space-y-1.5">
-                    <h5 className="text-[13px] font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+                <div key={i} className="relative pl-5 py-0.5 group">
+                  <div className="absolute left-0 top-0 bottom-0 w-[1.5px] bg-primary/20 rounded-full" />
+                  <div className="absolute left-[-3px] top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div className="space-y-1">
+                    <h5 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                       {opt.name}
-                      <CheckCircle2 className="h-3 w-3 text-primary opacity-50" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-primary/60" />
                     </h5>
                     {opt.description && (
-                      <p className="text-[12px] text-muted-foreground leading-snug font-medium italic">
+                      <p className="text-xs text-muted-foreground leading-normal pl-0.5">
                         {opt.description}
                       </p>
                     )}
@@ -90,9 +86,9 @@ export function MealCard({ title, ingredients, options, date, className }: MealC
         )}
 
         {(!ingredients && (!options || options.length === 0)) && (
-          <div className="flex flex-col items-center justify-center py-8 opacity-40">
-             <Info className="h-8 w-8 mb-2" />
-             <p className="text-xs font-bold uppercase tracking-widest text-center">Sin detalles adicionales</p>
+          <div className="flex flex-col items-center justify-center py-6 opacity-45">
+             <Info className="h-6 w-6 mb-2" />
+             <p className="text-xs font-semibold uppercase tracking-wider text-center">Sin detalles adicionales</p>
           </div>
         )}
       </CardContent>

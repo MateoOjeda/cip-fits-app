@@ -22,13 +22,13 @@ export function AvailableStudentsList({
 }: AvailableStudentsListProps) {
   return (
     <motion.div variants={itemVariants}>
-      <Card className="glass-panel overflow-hidden border-blue-400/20 rounded-2xl">
-        <CardHeader className="p-5 pb-3 bg-blue-500/5 backdrop-blur-md border-b border-white/5">
+      <Card className="border border-border/50 bg-card shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-              <Users className="h-5 w-5" />
+            <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-500">
+              <Users className="h-4.5 w-4.5" />
             </div>
-            <CardTitle className="text-base text-blue-500 font-display tracking-wide">
+            <CardTitle className="text-sm font-bold text-foreground">
               Disponibles ({students.length})
             </CardTitle>
           </div>
@@ -40,8 +40,8 @@ export function AvailableStudentsList({
             </div>
           ) : students.length === 0 ? (
             <div className="text-center py-6">
-              <Users className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
-              <p className="text-xs text-muted-foreground">No hay alumnos disponibles</p>
+              <Users className="h-7 w-7 mx-auto text-muted-foreground/60 mb-2" />
+              <p className="text-xs text-muted-foreground font-medium">No hay alumnos disponibles</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -55,7 +55,7 @@ export function AvailableStudentsList({
                   rightContent={
                     <Button
                       size="sm" variant="outline"
-                      className="gap-1 border-blue-400/30 text-blue-500 hover:bg-blue-500/10 flex-shrink-0 h-8 px-3 rounded-lg"
+                      className="gap-1 border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 flex-shrink-0 h-8 px-3 rounded-lg text-xs font-semibold"
                       disabled={linkingId === student.user_id}
                       onClick={() => onLink(student.user_id)}
                     >

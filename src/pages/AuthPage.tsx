@@ -23,8 +23,6 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"trainer" | "student">("student");
-  const [trainerCode, setTrainerCode] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [resetSent, setResetSent] = useState(false);
 
@@ -64,12 +62,7 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
-        if (role === "trainer" && trainerCode !== TRAINER_CODE) {
-          toast({ title: "Código inválido", description: "El código de entrenador no es correcto.", variant: "destructive" });
-          setLoading(false);
-          return;
-        }
-        const { error } = await signUp(email, password, name, role);
+        const { error } = await signUp(email, password, name);
         if (error) throw error;
         toast({ title: "¡Cuenta creada!", description: "Bienvenido a CipriFitness" });
       }
@@ -83,7 +76,7 @@ export default function AuthPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const { error } = await signInWithGoogle(role);
+      const { error } = await signInWithGoogle();
       if (error) throw error;
     } catch (err) {
       handleAuthError(err, "Google Auth");
@@ -224,27 +217,7 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {!isLogin && (
-                <div className="space-y-4 py-2 animate-in slide-in-from-top-2 duration-400">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/80">Soy un...</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setRole("student")} className={`flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all duration-300 group ${role === "student" ? "bg-primary/20 border-primary shadow-xl shadow-primary/10" : "bg-white/5 border-border/40 hover:bg-white/10"}`}>
-                      <User className={`h-6 w-6 mb-2 transition-colors ${role === "student" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${role === "student" ? "text-primary" : "text-muted-foreground"}`}>Alumno</span>
-                    </button>
-                    <button type="button" onClick={() => setRole("trainer")} className={`flex flex-col items-center justify-center p-4 rounded-3xl border-2 transition-all duration-300 group ${role === "trainer" ? "bg-accent/20 border-accent shadow-xl shadow-accent/10" : "bg-white/5 border-border/40 hover:bg-white/10"}`}>
-                      <Dumbbell className={`h-6 w-6 mb-2 transition-colors ${role === "trainer" ? "text-accent" : "text-muted-foreground"}`} />
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${role === "trainer" ? "text-accent" : "text-muted-foreground"}`}>Trainer</span>
-                    </button>
-                  </div>
-                  {role === "trainer" && (
-                    <div className="space-y-2 animate-in zoom-in-95 duration-300">
-                       <Label htmlFor="trainer-code" className="text-[10px] font-black uppercase tracking-widest ml-1 text-accent">Código de Acceso Pro</Label>
-                       <Input id="trainer-code" type="password" placeholder="Código maestro" value={trainerCode} onChange={(e) => setTrainerCode(e.target.value)} required className="h-12 rounded-2xl bg-accent/5 border-accent/20 text-accent font-bold text-center spacing-8" />
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Se eliminó la selección de rol en el registro. Todos los registros autónomos se crean como alumnos */}
 
               <Button type="submit" className="w-full h-14 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 mt-2 flex items-center justify-center gap-3 transition-transform active:scale-[0.98]" disabled={loading}>
                 {loading ? (

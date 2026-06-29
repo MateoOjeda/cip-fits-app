@@ -5,60 +5,60 @@
 
 @layer base {
   :root {
-    --background: 48 38% 94%;
-    --foreground: 230 28% 18%;
+    --background: 210 20% 98%;
+    --foreground: 224 71.4% 4.1%;
 
-    --card: 48 35% 92%;
-    --card-foreground: 230 28% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
 
-    --popover: 48 35% 92%;
-    --popover-foreground: 230 28% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
 
-    --primary: 230 28% 18%;
-    --primary-foreground: 48 38% 95%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 48 20% 88%;
-    --secondary-foreground: 230 28% 18%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 262.1 83.3% 30%;
 
-    --muted: 48 15% 90%;
-    --muted-foreground: 230 12% 40%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 8 60% 35%; /* Softer red */
-    --accent-foreground: 48 38% 98%;
+    --accent: 262.1 83.3% 57.8%;
+    --accent-foreground: 210 20% 98%;
 
-    --destructive: 0 65% 45%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 48 15% 85%;
-    --input: 48 15% 85%;
-    --ring: 230 28% 18%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262.1 83.3% 57.8%;
 
-    --radius: 1.25rem;
-    --neon-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    --neon-intensity: 0.15;
+    --radius: 0.5rem;
+    --neon-shadow: 0 1px 2px 0 rgba(0,0,0,0.03);
+    --neon-intensity: 0.05;
     
-    --sidebar-background: 230 30% 12%;
-    --sidebar-foreground: 48 38% 96%;
-    --sidebar-primary: 8 70% 45%;
-    --sidebar-primary-foreground: 48 38% 100%;
-    --sidebar-accent: 230 25% 18%;
-    --sidebar-accent-foreground: 48 30% 98%;
-    --sidebar-border: 230 20% 16%;
-    --sidebar-ring: 8 70% 35%;
+    --sidebar-background: 240 10% 3.9%;
+    --sidebar-foreground: 240 5% 64.9%;
+    --sidebar-primary: 262.1 83.3% 57.8%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 240 5.9% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 5.9% 12%;
+    --sidebar-ring: 262.1 83.3% 57.8%;
 
-    --brand-red: 8 75% 40%;
-    --neon-glow: 8 75% 45%;
+    --brand-red: 262.1 83.3% 57.8%;
+    --neon-glow: 262.1 83.3% 57.8%;
     --neon-orange: 25 95% 50%;
-    --chart-completed: 8 75% 42%;
-    --chart-pending: 230 15% 85%;
-    --success: 142 65% 35%;
-    --warning: 28 95% 45%;
+    --chart-completed: 262.1 83.3% 57.8%;
+    --chart-pending: 220 14.3% 90%;
+    --success: 142.1 76.2% 36.3%;
+    --warning: 37.9 92.1% 50.2%;
 
     /* Enhanced State Tokens */
-    --primary-hover: 230 28% 12%;
-    --accent-hover: 8 75% 30%;
-    --card-hover: 48 35% 94%;
-    --muted-hover: 48 15% 85%;
+    --primary-hover: 262.1 83.3% 45%;
+    --accent-hover: 262.1 83.3% 45%;
+    --card-hover: 210 20% 96%;
+    --muted-hover: 220 14.3% 90%;
   }
 }
 
@@ -72,8 +72,8 @@
     font-family: 'Inter', sans-serif;
   }
 
-  h1, h2, h3 {
-    font-family: 'Orbitron', sans-serif;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', sans-serif;
   }
 }
 

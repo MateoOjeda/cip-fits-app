@@ -5,6 +5,7 @@ import { Lock, Unlock, Copy, MessageCircle, Check, ArrowLeft, CreditCard } from 
 import { useState } from "react";
 import { toast } from "sonner";
 import { LEVELS, LEVEL_LABELS, PLAN_TYPES, formatPrice } from "@/lib/planConstants";
+import { cn } from "@/lib/utils";
 
 interface PlanLevel {
   id: string;
@@ -63,60 +64,65 @@ export default function PlanLevelDetail({ planType, planLevels, trainerInfo, tra
 
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => { setSelectedLevel(null); setShowPayment(false); }} className="gap-2 text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => { setSelectedLevel(null); setShowPayment(false); }} className="gap-1.5 text-muted-foreground hover:bg-muted/80">
           <ArrowLeft className="h-4 w-4" /> Volver a niveles
         </Button>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center"><Icon className="h-5 w-5 text-primary" /></div>
-          <div><h2 className="font-display font-bold text-lg">{planType.label}</h2><p className="text-xs text-muted-foreground">{LEVEL_LABELS[selectedLevel]}</p></div>
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4 mb-4">
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <Icon className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-foreground">{planType.label}</h2>
+            <p className="text-xs text-muted-foreground">{LEVEL_LABELS[selectedLevel]}</p>
+          </div>
         </div>
-        <Card className={`card-glass ${pl?.unlocked ? "neon-border" : ""}`}>
-          <CardHeader className="pb-2">
+        <Card className="border border-border/50 bg-card rounded-2xl shadow-sm">
+          <CardHeader className="pb-2 p-5">
             <div className="flex items-center gap-2">
-              {pl?.unlocked ? <Unlock className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
-              <Badge variant="outline" className={`text-[10px] ${pl?.unlocked ? "border-primary/40 text-primary" : "border-border text-muted-foreground"}`}>{pl?.unlocked ? "Desbloqueado" : "Bloqueado"}</Badge>
+              {pl?.unlocked ? <Unlock className="h-4 w-4 text-emerald-500" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+              <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${pl?.unlocked ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground"}`}>{pl?.unlocked ? "Desbloqueado" : "Bloqueado"}</Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-muted-foreground">{levelDesc[selectedLevel]}</p>
+          <CardContent className="space-y-4 p-5 pt-0">
+            <p className="text-xs text-muted-foreground leading-relaxed">{levelDesc[selectedLevel]}</p>
             {pl?.unlocked ? (
               pl.content ? (
-                <div className="text-sm whitespace-pre-wrap leading-relaxed bg-secondary/20 rounded-lg p-4">{pl.content}</div>
+                <div className="text-xs whitespace-pre-wrap leading-relaxed bg-muted/50 border border-border/40 rounded-xl p-4 text-foreground">{pl.content}</div>
               ) : (
-                <p className="text-sm text-muted-foreground italic">Tu entrenador aún no ha agregado contenido para este nivel.</p>
+                <p className="text-xs text-muted-foreground italic">Tu entrenador aún no ha agregado contenido para este nivel.</p>
               )
             ) : (
               <div className="space-y-4">
-                <div className="bg-secondary/30 rounded-lg p-4 text-center space-y-3">
-                  <Lock className="h-8 w-8 text-muted-foreground mx-auto" />
-                  <p className="text-sm text-muted-foreground">Este nivel está bloqueado. Realizá el pago para desbloquearlo.</p>
+                <div className="bg-muted/40 border border-border/40 rounded-xl p-5 text-center space-y-4">
+                  <Lock className="h-7 w-7 text-muted-foreground/60 mx-auto" />
+                  <p className="text-xs text-muted-foreground">Este nivel está bloqueado. Realiza el pago para desbloquear su contenido.</p>
                   {!showPayment ? (
-                    <Button className="gap-2 w-full" size="lg" onClick={() => setShowPayment(true)}>
-                      <CreditCard className="h-5 w-5" /> Pagar Plan
+                    <Button className="gap-2 w-full h-10 rounded-xl font-semibold" onClick={() => setShowPayment(true)}>
+                      <CreditCard className="h-4 w-4" /> Pagar Plan
                     </Button>
                   ) : (
-                    <div className="space-y-3 pt-2">
+                    <div className="space-y-3 pt-2 text-left">
                       {price > 0 && (
-                        <div className="bg-background/60 rounded-lg p-4 space-y-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide">Valor del plan</p>
-                          <p className="text-2xl font-display font-bold text-primary">{formatPrice(price)}</p>
+                        <div className="bg-card border border-border/50 rounded-xl p-4">
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Valor del plan</p>
+                          <p className="text-xl font-bold text-primary mt-0.5">{formatPrice(price)}</p>
                         </div>
                       )}
                       {trainerInfo?.mercadopago_alias && (
-                        <div className="bg-background/60 rounded-lg p-4 space-y-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide">CVU / Alias</p>
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-sm font-semibold">{trainerInfo.mercadopago_alias}</span>
-                            <Button variant="outline" size="sm" className="gap-1 h-7 px-2" onClick={copyAlias}>
-                              {copiedAlias ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
-                              {copiedAlias ? "¡Copiado!" : "Copiar"}
+                        <div className="bg-card border border-border/50 rounded-xl p-4">
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">CVU / Alias de Pago</p>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="text-xs font-semibold select-all text-foreground">{trainerInfo.mercadopago_alias}</span>
+                            <Button variant="outline" size="sm" className="gap-1 h-7 px-2.5 rounded-lg text-xs" onClick={copyAlias}>
+                              {copiedAlias ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                              {copiedAlias ? "Copiado" : "Copiar"}
                             </Button>
                           </div>
                         </div>
                       )}
                       {trainerInfo?.whatsapp_number && (
-                        <Button variant="outline" className="gap-2 w-full" onClick={() => openWhatsApp(LEVEL_LABELS[selectedLevel])}>
-                          <MessageCircle className="h-4 w-4" /> Enviar Comprobante
+                        <Button variant="outline" className="gap-2 w-full h-10 rounded-xl text-xs font-semibold" onClick={() => openWhatsApp(LEVEL_LABELS[selectedLevel])}>
+                          <MessageCircle className="h-4 w-4 text-emerald-500" /> Enviar Comprobante por WhatsApp
                         </Button>
                       )}
                     </div>
@@ -132,24 +138,41 @@ export default function PlanLevelDetail({ planType, planLevels, trainerInfo, tra
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onBack} className="gap-2 text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Volver a planes</Button>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center"><Icon className="h-5 w-5 text-primary" /></div>
-        <div><h2 className="font-display font-bold text-lg">{planType.label}</h2><p className="text-xs text-muted-foreground">{planType.description}</p></div>
+      <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-muted-foreground hover:bg-muted/80">
+        <ArrowLeft className="h-4 w-4" /> Volver a planes
+      </Button>
+      <div className="flex items-center gap-3 border-b border-border/50 pb-4 mb-4">
+        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-foreground">{planType.label}</h2>
+          <p className="text-xs text-muted-foreground">{planType.description}</p>
+        </div>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {LEVELS.map((level) => {
           const pl = planLevels.find((p) => p.plan_type === planType.key && p.level === level);
           return (
-            <Card key={level} className={`card-glass cursor-pointer group hover:neon-border transition-all ${pl?.unlocked ? "neon-border" : "opacity-70"}`} onClick={() => { setSelectedLevel(level); setShowPayment(false); }}>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${pl?.unlocked ? "bg-primary/15" : "bg-secondary"}`}>
-                  {pl?.unlocked ? <Unlock className="h-5 w-5 text-primary" /> : <Lock className="h-5 w-5 text-muted-foreground" />}
+            <Card 
+              key={level} 
+              className={cn(
+                "border cursor-pointer group hover:bg-muted/10 transition-all rounded-xl shadow-sm",
+                pl?.unlocked ? "border-border/50 bg-card" : "border-border/40 bg-card/60 opacity-80"
+              )} 
+              onClick={() => { setSelectedLevel(level); setShowPayment(false); }}
+            >
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className={cn(
+                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                  pl?.unlocked ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted text-muted-foreground"
+                )}>
+                  {pl?.unlocked ? <Unlock className="h-4.5 w-4.5" /> : <Lock className="h-4.5 w-4.5" />}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm">{LEVEL_LABELS[level]}</h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{levelDesc[level]}</p>
-                  <Badge variant="outline" className={`text-[10px] mt-1 ${pl?.unlocked ? "border-primary/40 text-primary" : "border-border text-muted-foreground"}`}>{pl?.unlocked ? "Desbloqueado" : "Bloqueado"}</Badge>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm text-foreground">{LEVEL_LABELS[level]}</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{levelDesc[level]}</p>
+                  <Badge variant="outline" className={`text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md mt-1.5 ${pl?.unlocked ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground"}`}>{pl?.unlocked ? "Desbloqueado" : "Bloqueado"}</Badge>
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { 
   collection, 
@@ -155,15 +155,18 @@ export default function ExerciseHistoryTab({ studentId }: Props) {
     }
   };
 
-  // Group by date
-  const grouped = logs.reduce<Record<string, ExerciseLog[]>>((acc, log) => {
-    const key = log.log_date;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(log);
-    return acc;
-  }, {});
+  // Group and sort logs by date memoized to avoid redundant calculations on renders
+  const { grouped, sortedDates } = useMemo(() => {
+    const grouped = logs.reduce<Record<string, ExerciseLog[]>>((acc, log) => {
+      const key = log.log_date;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(log);
+      return acc;
+    }, {});
 
-  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+    const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+    return { grouped, sortedDates };
+  }, [logs]);
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;

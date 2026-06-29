@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -8,11 +8,12 @@ import {
   where, 
   getDocs, 
   doc, 
-  getDoc,
   updateDoc,
   setDoc,
-  onSnapshot
 } from "firebase/firestore";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useStudentDashboard } from "@/hooks/useStudentDashboard";
+import { useStudentRoutines } from "@/hooks/useStudentRoutines";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,103 +59,110 @@ function getTodayDay(): string {
 
 export default function StudentRoutinesPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   const today = getTodayDay();
   const [selectedDay, setSelectedDay] = useState<string>(today);
   const [activeTab, setActiveTab] = useState<string>("personal");
   
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [groupExercises, setGroupExercises] = useState<Exercise[]>([]);
   const [exerciseSets, setExerciseSets] = useState<Record<string, SetData[]>>({});
-  
-  const [loading, setLoading] = useState(true);
-  const [hasGroupRoutine, setHasGroupRoutine] = useState(false);
   const [logExercise, setLogExercise] = useState<Exercise | null>(null);
 
-  const fetchExercises = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
+  // Fetch student dashboard data to retrieve trainer_id
+  const { studentData } = useStudentDashboard(user?.uid);
+  const trainerId = studentData?.trainer_id;
 
-    try {
-      const todayDate = new Date().toISOString().split("T")[0];
+  // Fetch personal exercises via useStudentRoutines hook
+  const {
+    exercises: personalExercises,
+    isLoading: isLoadingPersonal,
+  } = useStudentRoutines(trainerId, user?.uid);
 
-      // Fetch Personal Exercises
-      const qEx = query(collection(db, "exercises"), where("student_id", "==", user.uid));
-      const snapEx = await getDocs(qEx);
-      const personalExs = snapEx.docs.map(d => ({ id: d.id, ...d.data(), isGroup: false } as Exercise));
-      setExercises(personalExs);
-
-      // Fetch Group Memberships
+  // Fetch group membership
+  const groupMembershipQuery = useQuery({
+    queryKey: ["groupMembership", user?.uid],
+    queryFn: async () => {
+      if (!user) return null;
       const qMem = query(collection(db, "training_group_members"), where("student_id", "==", user.uid));
       const snapMem = await getDocs(qMem);
+      if (snapMem.empty) return null;
+      return snapMem.docs[0].data();
+    },
+    enabled: !!user?.uid,
+  });
+
+  const groupId = groupMembershipQuery.data?.group_id;
+  const hasGroupRoutine = !!groupId;
+
+  // Fetch group exercises
+  const groupExercisesQuery = useQuery({
+    queryKey: ["groupExercises", groupId],
+    queryFn: async () => {
+      if (!groupId) return [];
+      const qGrpEx = query(collection(db, "group_exercises"), where("group_id", "==", groupId));
+      const snapGrpEx = await getDocs(qGrpEx);
+      return snapGrpEx.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        completed: false,
+        trainer_id: d.data().trainer_id || "",
+        isGroup: true 
+      } as Exercise));
+    },
+    enabled: !!groupId,
+  });
+
+  const todayDate = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+  // Fetch today's logs to mark completions
+  const exerciseLogsQuery = useQuery({
+    queryKey: ["exerciseLogs", user?.uid, todayDate],
+    queryFn: async () => {
+      if (!user) return [];
+      const qLogs = query(
+        collection(db, "exercise_logs"),
+        where("student_id", "==", user.uid),
+        where("log_date", "==", todayDate)
+      );
+      const snapLogs = await getDocs(qLogs);
+      return snapLogs.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    enabled: !!user?.uid,
+  });
+
+  // Derived state: personal exercises with completed flag
+  const exercises = useMemo(() => {
+    const rawExercises = personalExercises || [];
+    const logs = exerciseLogsQuery.data || [];
+    const completedLogIds = new Set(logs.filter((l: any) => l.completed).map((l: any) => l.exercise_id));
+    return rawExercises.map((ex: any) => {
+      if (ex.day === today && completedLogIds.has(ex.id)) {
+        return { ...ex, completed: true };
+      }
+      return ex;
+    });
+  }, [personalExercises, exerciseLogsQuery.data, today]);
+
+  // Derived state: group exercises with completed flag
+  const groupExercises = useMemo(() => {
+    const rawGroupExercises = groupExercisesQuery.data || [];
+    const logs = exerciseLogsQuery.data || [];
+    const completedLogIds = new Set(logs.filter((l: any) => l.completed).map((l: any) => l.exercise_id));
+    return rawGroupExercises.map((ex: any) => {
+      if (ex.day === today && completedLogIds.has(ex.id)) {
+        return { ...ex, completed: true };
+      }
+      return ex;
+    });
+  }, [groupExercisesQuery.data, exerciseLogsQuery.data, today]);
+
+  // Sync set states (initialized from logs + localstorage cache)
+  useEffect(() => {
+    if (exerciseLogsQuery.isSuccess && (personalExercises.length > 0 || groupExercisesQuery.isSuccess)) {
+      const allExs = [...(personalExercises || []), ...(groupExercisesQuery.data || [])];
+      if (allExs.length === 0) return;
       
-      let groupExs: Exercise[] = [];
-      if (!snapMem.empty) {
-        const groupId = snapMem.docs[0].data().group_id;
-        const qGrpEx = query(collection(db, "group_exercises"), where("group_id", "==", groupId));
-        const snapGrpEx = await getDocs(qGrpEx);
-        
-        if (!snapGrpEx.empty) {
-          groupExs = snapGrpEx.docs.map(d => ({ 
-            id: d.id, 
-            ...d.data(),
-            completed: false, // Will be overridden if log exists
-            trainer_id: d.data().trainer_id || "",
-            isGroup: true 
-          } as Exercise));
-          setGroupExercises(groupExs);
-          setHasGroupRoutine(true);
-        } else {
-          setGroupExercises([]);
-          setHasGroupRoutine(false);
-        }
-      } else {
-        setGroupExercises([]);
-        setHasGroupRoutine(false);
-      }
-
-      const allExercises = [...personalExs, ...groupExs];
-
-      // Fetch logs for today to mark completions
-      let weights: Record<string, string> = {};
-      const completedLogIds = new Set<string>();
-      if (allExercises.length > 0) {
-        const qLogs = query(
-          collection(db, "exercise_logs"),
-          where("student_id", "==", user.uid),
-          where("log_date", "==", todayDate)
-        );
-        const snapLogs = await getDocs(qLogs);
-        snapLogs.forEach(d => {
-          const data = d.data();
-          if (data.actual_weight !== null) {
-            weights[data.exercise_id] = String(data.actual_weight);
-          }
-          if (data.completed) {
-            completedLogIds.add(data.exercise_id);
-          }
-        });
-      }
-
-      // Mark exercises as completed if there's a log for today
-      const updatedExercises = personalExs.map(ex => {
-        if (ex.day === today && completedLogIds.has(ex.id)) {
-          return { ...ex, completed: true };
-        }
-        return ex;
-      });
-      const updatedGroupExercises = groupExs.map(ex => {
-         if (ex.day === today && completedLogIds.has(ex.id)) {
-           return { ...ex, completed: true };
-         }
-         return ex;
-      });
-
-      setExercises(updatedExercises);
-      setGroupExercises(updatedGroupExercises);
-
-      // Load Sets from localStorage
-      const savedStateStr = localStorage.getItem(`routine_sets_${user.uid}_${todayDate}`);
+      const savedStateStr = localStorage.getItem(`routine_sets_${user?.uid}_${todayDate}`);
       let savedState: Record<string, SetData[]> = {};
       if (savedStateStr) {
         try {
@@ -162,56 +170,75 @@ export default function StudentRoutinesPage() {
         } catch (e) {}
       }
 
+      const logs = exerciseLogsQuery.data || [];
+      const weights: Record<string, string> = {};
+      const completedLogIds = new Set<string>();
+      logs.forEach((log: any) => {
+        if (log.actual_weight !== null) {
+          weights[log.exercise_id] = String(log.actual_weight);
+        }
+        if (log.completed) {
+          completedLogIds.add(log.exercise_id);
+        }
+      });
+
       const newExerciseSets: Record<string, SetData[]> = {};
-      allExercises.forEach((ex) => {
+      allExs.forEach((ex) => {
+        const isCompleted = ex.day === today && completedLogIds.has(ex.id);
         if (savedState[ex.id]) {
-           if (ex.completed && !savedState[ex.id].every(s => s.completed)) {
-             newExerciseSets[ex.id] = savedState[ex.id].map(s => ({ ...s, completed: true }));
-           } else {
-             newExerciseSets[ex.id] = savedState[ex.id];
-           }
+          if (isCompleted && !savedState[ex.id].every(s => s.completed)) {
+            newExerciseSets[ex.id] = savedState[ex.id].map(s => ({ ...s, completed: true }));
+          } else {
+            newExerciseSets[ex.id] = savedState[ex.id];
+          }
         } else {
-           const setsCount = ex.sets || 1;
-           const defaultWeight = weights[ex.id] || ex.weight?.toString() || "";
-           const sets: SetData[] = [];
-           for (let i = 0; i < setsCount; i++) {
-             sets.push({
-               id: `${ex.id}-set-${i}`,
-               weight: defaultWeight,
-               reps: ex.reps?.toString() || "",
-               completed: ex.completed,
-             });
-           }
-           newExerciseSets[ex.id] = sets;
+          const setsCount = ex.sets || 1;
+          const defaultWeight = weights[ex.id] || ex.weight?.toString() || "";
+          const sets: SetData[] = [];
+          for (let i = 0; i < setsCount; i++) {
+            sets.push({
+              id: `${ex.id}-set-${i}`,
+              weight: defaultWeight,
+              reps: ex.reps?.toString() || "",
+              completed: isCompleted,
+            });
+          }
+          newExerciseSets[ex.id] = sets;
         }
       });
 
       setExerciseSets(newExerciseSets);
-      localStorage.setItem(`routine_sets_${user.uid}_${todayDate}`, JSON.stringify(newExerciseSets));
-
-    } catch (err) {
-      console.error("Error fetching exercises:", err);
-    } finally {
-      setLoading(false);
     }
-  }, [user, today]);
+  }, [exerciseLogsQuery.isSuccess, exerciseLogsQuery.data, personalExercises, groupExercisesQuery.data, groupExercisesQuery.isSuccess, user?.uid, today, todayDate]);
 
+  // Listen to window storage events to sync across tabs
   useEffect(() => {
-    fetchExercises();
-  }, [fetchExercises]);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "exercises"), where("student_id", "==", user.uid));
-    const unsubscribe = onSnapshot(q, () => {
-      fetchExercises();
-    });
-    window.addEventListener('storage', fetchExercises);
-    return () => { 
-      unsubscribe();
-      window.removeEventListener('storage', fetchExercises);
+    const handleStorageChange = () => {
+      exerciseLogsQuery.refetch();
     };
-  }, [user, fetchExercises]);
+    window.addEventListener('storage', handleStorageChange);
+    return () => { 
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [exerciseLogsQuery]);
+
+  const updateExerciseMutation = useMutation({
+    mutationFn: async ({ exerciseId, completed }: { exerciseId: string; completed: boolean }) => {
+      await updateDoc(doc(db, "exercises", exerciseId), { completed });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["routineData", trainerId, user?.uid] });
+    }
+  });
+
+  const saveLogMutation = useMutation({
+    mutationFn: async ({ logId, logPayload }: { logId: string; logPayload: any }) => {
+      await setDoc(doc(doc(db, "exercise_logs", logId).parent, logId), logPayload, { merge: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exerciseLogs", user?.uid, todayDate] });
+    }
+  });
 
   const saveExerciseProgress = async (exerciseId: string, sets: SetData[], markCompleted: boolean) => {
     const isGroup = groupExercises.some(e => e.id === exerciseId);
@@ -222,30 +249,38 @@ export default function StudentRoutinesPage() {
     try {
       const maxWeight = Math.max(...sets.map(s => parseFloat(s.weight) || 0), 0);
       const currentSetsCount = sets.length;
-      const todayDate = new Date().toISOString().split("T")[0];
       
       if (!isGroup) {
-        await updateDoc(doc(db, "exercises", exerciseId), { completed: markCompleted });
-        setExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, completed: markCompleted } : e)));
+        await updateExerciseMutation.mutateAsync({ exerciseId, completed: markCompleted });
       } else {
-        setGroupExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, completed: markCompleted } : e)));
+        queryClient.invalidateQueries({ queryKey: ["groupExercises", groupId] });
       }
 
+      const logId = `${exercise.id}_${todayDate}`;
       if (markCompleted) {
-        const logId = `${exercise.id}_${todayDate}`;
-        await setDoc(doc(db, "exercise_logs", logId), {
-          exercise_id: exercise.id,
-          student_id: user.uid,
-          trainer_id: exercise.trainer_id,
-          log_date: todayDate,
-          completed: true,
-          actual_weight: maxWeight > 0 ? maxWeight : null,
-          actual_sets: currentSetsCount,
-          actual_reps: exercise.is_to_failure ? null : exercise.reps,
-          created_at: new Date().toISOString()
-        }, { merge: true });
+        await saveLogMutation.mutateAsync({
+          logId,
+          logPayload: {
+            exercise_id: exercise.id,
+            student_id: user.uid,
+            trainer_id: exercise.trainer_id || "",
+            log_date: todayDate,
+            completed: true,
+            actual_weight: maxWeight > 0 ? maxWeight : null,
+            actual_sets: currentSetsCount,
+            actual_reps: exercise.is_to_failure ? null : exercise.reps,
+            created_at: new Date().toISOString()
+          }
+        });
 
         toast.success(`${exercise.name} completado`);
+      } else {
+        await saveLogMutation.mutateAsync({
+          logId,
+          logPayload: {
+            completed: false
+          }
+        });
       }
     } catch (err) {
       console.error("Error saving exercise progress:", err);
@@ -309,6 +344,8 @@ export default function StudentRoutinesPage() {
     });
   };
 
+  const loading = isLoadingPersonal || groupMembershipQuery.isLoading || groupExercisesQuery.isLoading || exerciseLogsQuery.isLoading;
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -326,17 +363,17 @@ export default function StudentRoutinesPage() {
   const renderExercises = (exs: Exercise[], isGroup: boolean) => {
     if (exs.length === 0) {
       return (
-        <Card className="card-glass border-white/5">
+        <Card className="border border-border/40 bg-card/60 shadow-sm">
           <CardContent className="p-8 text-center flex flex-col items-center">
-            <CalendarCheck className="h-12 w-12 text-muted-foreground/30 mb-3" />
-            <h3 className="font-semibold text-muted-foreground">Día de descanso</h3>
-            <p className="text-xs text-muted-foreground/60 mt-1">No tienes ejercicios programados para el {selectedDay.toLowerCase()}</p>
+            <CalendarCheck className="h-10 w-10 text-muted-foreground/30 mb-2.5" />
+            <h3 className="text-sm font-semibold text-foreground">Día de descanso</h3>
+            <p className="text-xs text-muted-foreground mt-1">No tienes ejercicios programados para el {selectedDay.toLowerCase()}</p>
           </CardContent>
         </Card>
       );
     }
 
-    // Group by body part (optional, as in original TodayRoutinePage)
+    // Group by body part
     const grouped: Record<string, Exercise[]> = {};
     exs.forEach((ex) => {
       const key = ex.body_part || "General";
@@ -347,60 +384,53 @@ export default function StudentRoutinesPage() {
     return (
       <div className="space-y-6">
         {Object.entries(grouped).map(([bodyPart, partExs]) => (
-          <div key={bodyPart} className="space-y-4">
+          <div key={bodyPart} className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-              <Badge variant="outline" className={cn(
-                "uppercase tracking-widest text-[9px] px-4 py-1",
-                isGroup ? "border-accent/40 text-accent bg-accent/5" : "badge-info-tag"
-              )}>
-                {bodyPart}
-              </Badge>
-              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{bodyPart}</span>
+              <div className="h-[1px] flex-1 bg-border/50" />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {partExs.map((exercise) => {
-                const accentColor = isGroup ? "accent" : "primary";
                 return (
                   <Card
                     key={exercise.id}
                     className={cn(
-                      "card-premium border-border/40 bg-card transition-all duration-500 rounded-[2.5rem] overflow-hidden flex flex-col shadow-xl",
+                      "border bg-card transition-all duration-200 rounded-xl overflow-hidden flex flex-col shadow-sm",
                       exercise.completed 
-                        ? (isGroup ? "border-accent/40 bg-accent/5 opacity-90 shadow-accent/5" : "border-primary/40 bg-primary/5 opacity-90 shadow-primary/5") 
-                        : (isGroup ? "hover:border-accent/20 hover:bg-card/90" : "hover:border-primary/20 hover:bg-card/90")
+                        ? (isGroup ? "border-indigo-500/25 bg-indigo-500/5 dark:bg-indigo-500/10" : "border-primary/25 bg-primary/5 dark:bg-primary/10") 
+                        : "border-border/50 hover:border-border/80 hover:shadow-md"
                     )}
                   >
                     <CardContent className="p-0 flex flex-col h-full">
                       {/* Header */}
-                      <div className="bg-muted/40 p-5 flex items-center justify-between border-b border-border/40">
-                        <div className="flex items-center gap-4 min-w-0">
+                      <div className="bg-muted/40 p-4 flex items-center justify-between border-b border-border/40">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
-                            "h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
+                            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                             exercise.completed 
-                              ? (isGroup ? "bg-accent/20 text-accent" : "bg-primary/20 text-primary") 
-                              : "bg-muted/50 text-muted-foreground"
+                              ? (isGroup ? "bg-indigo-500/20 text-indigo-600 dark:text-indigo-400" : "bg-primary/20 text-primary") 
+                              : "bg-muted text-muted-foreground"
                           )}>
-                            <Dumbbell className="h-5 w-5" />
+                            <Dumbbell className="h-4.5 w-4.5" />
                           </div>
                           <div className="min-w-0">
                             <h3 className={cn(
-                              "font-bold text-base leading-tight truncate cursor-pointer transition-colors",
-                              exercise.completed && (isGroup ? "text-accent/80" : "text-primary/80"),
-                              isGroup ? "hover:text-accent" : "hover:text-primary"
+                              "font-semibold text-sm leading-tight truncate cursor-pointer transition-colors text-foreground",
+                              exercise.completed && (isGroup ? "text-indigo-600/90 dark:text-indigo-400/90" : "text-primary/90"),
+                              isGroup ? "hover:text-indigo-500" : "hover:text-primary"
                             )} onClick={() => setLogExercise(exercise)}>
                               {exercise.name}
                             </h3>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-0.5">
                               {exercise.is_to_failure && (
-                                <span className="text-[9px] font-black bg-destructive/10 text-destructive border border-destructive/20 px-2 py-0.5 rounded uppercase tracking-tighter">
+                                <span className="text-[8px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                   Al fallo 🔥
                                 </span>
                               )}
                               {exercise.completed && (
                                 <span className={cn(
-                                  "text-[9px] font-black border px-2 py-0.5 rounded uppercase tracking-tighter",
-                                  isGroup ? "bg-accent/10 text-accent border-accent/20" : "bg-primary/10 text-primary border-primary/20"
+                                  "text-[8px] font-bold border px-1.5 py-0.5 rounded uppercase tracking-wider",
+                                  isGroup ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20" : "bg-primary/10 text-primary border-primary/20"
                                 )}>
                                   Listo
                                 </span>
@@ -408,46 +438,46 @@ export default function StudentRoutinesPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <ExerciseVideoButton exerciseName={exercise.name} />
                           <Button 
                             size="icon" variant="ghost" 
                             className={cn(
-                              "h-10 w-10 rounded-xl text-muted-foreground transition-all",
-                              isGroup ? "hover:bg-accent/10 hover:text-accent" : "hover:bg-primary/10 hover:text-primary"
+                              "h-8 w-8 rounded-lg text-muted-foreground transition-all hover:bg-muted/80",
+                              isGroup ? "hover:text-indigo-500" : "hover:text-primary"
                             )}
                             onClick={() => setLogExercise(exercise)}
                           >
-                            <ClipboardEdit className="h-5 w-5" />
+                            <ClipboardEdit className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
 
                       {/* Sets Table */}
-                      <div className="p-5 flex-1">
-                        <div className="grid grid-cols-[40px_1fr_1fr_50px] gap-3 px-2 mb-3 text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50">
+                      <div className="p-4 flex-1">
+                        <div className="grid grid-cols-[30px_1fr_1fr_40px] gap-2 px-1 mb-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider opacity-60">
                           <div className="text-center">SET</div>
                           <div className="text-center">KG</div>
                           <div className="text-center">REPS</div>
                           <div className="text-center">OK</div>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {exerciseSets[exercise.id]?.map((set, idx) => (
                             <div 
                               key={set.id} 
                               className={cn(
-                                "grid grid-cols-[40px_1fr_1fr_50px] items-center gap-3 p-1.5 rounded-2xl transition-all duration-300 border",
+                                "grid grid-cols-[30px_1fr_1fr_40px] items-center gap-2 p-1 rounded-lg transition-all border",
                                 set.completed 
-                                  ? (isGroup ? "bg-accent/5 border-accent/30" : "bg-primary/5 border-primary/30") 
-                                  : "bg-muted/20 border-border/30 hover:bg-muted/40"
+                                  ? (isGroup ? "bg-indigo-500/5 border-indigo-500/20" : "bg-primary/5 border-primary/20") 
+                                  : "bg-muted/10 border-border/20 hover:bg-muted/20"
                               )}
                             >
-                              <div className="text-xs font-black text-center text-muted-foreground/80">{idx + 1}</div>
+                              <div className="text-[11px] font-bold text-center text-muted-foreground/80">{idx + 1}</div>
                               <div>
                                 <Input 
                                   type="number" step="0.5" 
-                                  className="input-premium h-10 w-full text-center text-sm font-bold border-none bg-transparent hover:bg-muted/40 focus:bg-muted/60" 
+                                  className="h-8 w-full text-center text-xs font-bold border-none bg-transparent hover:bg-muted/30 focus:bg-muted/50 rounded-md focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" 
                                   value={set.weight} 
                                   onChange={(e) => handleSetChange(exercise.id, set.id, "weight", e.target.value)} 
                                   placeholder="-" 
@@ -456,7 +486,7 @@ export default function StudentRoutinesPage() {
                               <div>
                                 <Input 
                                   type="number" 
-                                  className="input-premium h-10 w-full text-center text-sm font-bold border-none bg-transparent hover:bg-muted/40 focus:bg-muted/60" 
+                                  className="h-8 w-full text-center text-xs font-bold border-none bg-transparent hover:bg-muted/30 focus:bg-muted/50 rounded-md focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" 
                                   value={set.reps} 
                                   onChange={(e) => handleSetChange(exercise.id, set.id, "reps", e.target.value)} 
                                   placeholder="-" 
@@ -467,9 +497,9 @@ export default function StudentRoutinesPage() {
                                   checked={set.completed} 
                                   onCheckedChange={(c) => handleSetComplete(exercise.id, set.id, !!c)} 
                                   className={cn(
-                                    "h-7 w-7 rounded-lg transition-transform active:scale-90",
+                                    "h-5 w-5 rounded transition-transform active:scale-90",
                                     isGroup 
-                                      ? "data-[state=checked]:bg-accent data-[state=checked]:border-accent" 
+                                      ? "data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500" 
                                       : "data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                   )} 
                                 />
@@ -478,18 +508,18 @@ export default function StudentRoutinesPage() {
                           ))}
                         </div>
 
-                        <div className="mt-6 flex justify-center">
+                        <div className="mt-4 flex justify-center">
                           <Button 
-                            variant="ghost" size="sm" 
+                            variant="outline" size="sm" 
                             className={cn(
-                              "btn-premium-outline h-10 px-6 rounded-full text-xs gap-2 border-dashed border-muted-foreground/30 text-muted-foreground transition-all",
+                              "h-8 px-4 rounded-lg text-xs gap-1.5 border-dashed border-border text-muted-foreground transition-all hover:bg-muted/50",
                               isGroup 
-                                ? "hover:text-accent hover:border-accent hover:border-solid" 
-                                : "hover:text-primary hover:border-primary hover:border-solid"
+                                ? "hover:text-indigo-600 hover:border-indigo-500/40" 
+                                : "hover:text-primary hover:border-primary/40"
                             )}
                             onClick={() => handleAddSet(exercise.id)}
                           >
-                            <Plus className="h-4 w-4" /> Añadir serie
+                            <Plus className="h-3.5 w-3.5" /> Serie
                           </Button>
                         </div>
                       </div>
@@ -505,33 +535,32 @@ export default function StudentRoutinesPage() {
   };
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 sm:p-6 pb-32 animate-in fade-in duration-750">
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="mb-8 text-center sm:text-left relative">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-3 relative z-10">
-          <h1 className="text-4xl sm:text-5xl font-display font-black tracking-tighter uppercase italic leading-none">
-            Mi <span className="text-primary italic-none tracking-normal">Rutina</span>
-          </h1>
-          <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full w-fit mx-auto sm:mx-0">
-            <Dumbbell className="h-3 w-3 text-primary" />
-            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Entrenamiento</span>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mi Entrenamiento</h1>
+          <p className="text-sm text-muted-foreground mt-1">Sigue tu rutina diaria y registra tus series y repeticiones</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
+          <Dumbbell className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Entrenamiento</span>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         {hasGroupRoutine && (
-          <div className="flex justify-center mb-6">
-            <TabsList className="bg-card/50 border border-border/50 rounded-full p-1 h-auto shadow-inner">
+          <div className="flex justify-center">
+            <TabsList className="bg-muted/60 border border-border/40 rounded-xl p-1 h-10 shadow-sm">
               <TabsTrigger 
                 value="personal" 
-                className="rounded-full px-6 py-2.5 text-xs font-bold uppercase tracking-wider data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg transition-all"
+                className="rounded-lg px-5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
               >
                 Rutina Personal
               </TabsTrigger>
               <TabsTrigger 
                 value="group" 
-                className="rounded-full px-6 py-2.5 text-xs font-bold uppercase tracking-wider data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-lg transition-all"
+                className="rounded-lg px-5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
               >
                 Rutina Grupal
               </TabsTrigger>
@@ -540,11 +569,10 @@ export default function StudentRoutinesPage() {
         )}
 
         {/* Week Day Selector */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-10">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {DAYS.map((day, i) => {
             const isSelected = selectedDay === day;
             const isToday = day === today;
-            // Count exercises for this day (total)
             const personalCount = exercises.filter(e => e.day === day).length;
             const groupCount = groupExercises.filter(e => e.day === day).length;
             const totalCount = personalCount + groupCount;
@@ -554,25 +582,25 @@ export default function StudentRoutinesPage() {
                 key={day}
                 onClick={() => setSelectedDay(day)}
                 className={cn(
-                  "relative flex flex-col items-center justify-center h-16 sm:h-20 rounded-2xl text-sm font-black border transition-all duration-300 group active:scale-95",
+                  "relative flex flex-col items-center justify-center h-14 sm:h-16 rounded-xl text-sm font-semibold border transition-all active:scale-95",
                   isSelected
-                    ? "bg-primary border-primary text-white shadow-xl shadow-primary/20 scale-105 z-10"
+                    ? "bg-primary border-primary text-primary-foreground shadow-md"
                     : isToday
-                      ? "bg-primary/10 border-primary/40 text-primary shadow-lg shadow-primary/5 hover:bg-primary/20"
-                      : "bg-white/5 border-white/5 text-muted-foreground hover:bg-white/10"
+                      ? "bg-primary/5 border-primary/30 text-primary hover:bg-primary/10"
+                      : "bg-card border-border/50 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                 )}
               >
                 <span className={cn(
-                  "text-[10px] sm:text-xs uppercase tracking-tighter mb-1 font-bold transition-colors",
-                  isSelected ? "text-white" : isToday ? "text-primary" : "text-muted-foreground"
+                  "text-[10px] uppercase tracking-wider mb-1 transition-colors",
+                  isSelected ? "text-primary-foreground/90" : isToday ? "text-primary" : "text-muted-foreground/80"
                 )}>
                   {DAY_SHORT[i]}
                 </span>
                 
                 {totalCount > 0 ? (
                   <div className={cn(
-                    "flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 rounded-xl text-[9px] sm:text-[10px] font-black shadow-md transition-colors",
-                    isSelected ? "bg-white text-primary" : "bg-primary text-white"
+                    "flex items-center justify-center h-5 w-5 rounded-md text-[9px] font-bold shadow-sm transition-colors",
+                    isSelected ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
                   )}>
                     {totalCount}
                   </div>
@@ -580,7 +608,7 @@ export default function StudentRoutinesPage() {
                   <div className="h-1 w-1 rounded-full bg-muted-foreground/30 mt-1" />
                 )}
                 {isToday && !isSelected && (
-                  <div className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
+                  <div className="absolute top-1.5 right-1.5 h-1.5 w-1.5 bg-primary rounded-full animate-pulse" />
                 )}
               </button>
             );
@@ -590,19 +618,19 @@ export default function StudentRoutinesPage() {
         {/* Rest Timer */}
         <RestTimer />
 
-        <TabsContent value="personal" className="focus-visible:outline-none animate-in fade-in duration-500">
+        <TabsContent value="personal" className="focus-visible:outline-none animate-in fade-in duration-300">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-display font-black uppercase tracking-tight">Rutina Personal</h2>
-            <span className="text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/50">
+            <h2 className="text-base font-bold tracking-tight text-foreground">Rutina Personal</h2>
+            <span className="text-[11px] font-semibold text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/40">
               {currentPersonalExs.filter(e => e.completed).length}/{currentPersonalExs.length} Completados
             </span>
           </div>
           
           {allPersonalCompleted && currentPersonalExs.length > 0 && (
-            <Card className="card-premium border-primary/20 bg-primary/5 rounded-[2rem] py-6 mb-6 shadow-lg shadow-primary/5">
-              <CardContent className="p-0 text-center space-y-2">
-                <Flame className="h-8 w-8 text-primary mx-auto mb-2 animate-bounce" />
-                <h3 className="text-lg font-black uppercase italic">¡Rutina Personal Finalizada!</h3>
+            <Card className="border border-green-500/20 bg-green-500/5 dark:bg-green-500/10 rounded-xl py-4 mb-4 shadow-sm">
+              <CardContent className="p-0 text-center space-y-1.5">
+                <Flame className="h-6 w-6 text-green-600 dark:text-green-400 mx-auto mb-1 animate-pulse" />
+                <h3 className="text-sm font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">¡Rutina Personal Finalizada!</h3>
               </CardContent>
             </Card>
           )}
@@ -611,19 +639,19 @@ export default function StudentRoutinesPage() {
         </TabsContent>
 
         {hasGroupRoutine && (
-          <TabsContent value="group" className="focus-visible:outline-none animate-in fade-in duration-500">
+          <TabsContent value="group" className="focus-visible:outline-none animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-display font-black uppercase tracking-tight text-accent">Rutina de Grupo</h2>
-              <span className="text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/50">
+              <h2 className="text-base font-bold tracking-tight text-foreground">Rutina de Grupo</h2>
+              <span className="text-[11px] font-semibold text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/40">
                 {currentGroupExs.filter(e => e.completed).length}/{currentGroupExs.length} Completados
               </span>
             </div>
 
             {allGroupCompleted && currentGroupExs.length > 0 && (
-              <Card className="card-premium border-accent/20 bg-accent/5 rounded-[2rem] py-6 mb-6 shadow-lg shadow-accent/5">
-                <CardContent className="p-0 text-center space-y-2">
-                  <Flame className="h-8 w-8 text-accent mx-auto mb-2 animate-bounce" />
-                  <h3 className="text-lg font-black uppercase italic text-accent">¡Rutina Grupal Finalizada!</h3>
+              <Card className="border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-xl py-4 mb-4 shadow-sm">
+                <CardContent className="p-0 text-center space-y-1.5">
+                  <Flame className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mx-auto mb-1 animate-pulse" />
+                  <h3 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">¡Rutina Grupal Finalizada!</h3>
                 </CardContent>
               </Card>
             )}

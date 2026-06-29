@@ -10,7 +10,8 @@ import {
   deleteDoc, 
   updateDoc, 
   addDoc,
-  writeBatch
+  writeBatch,
+  limit
 } from "firebase/firestore";
 
 export interface StudentProfile {
@@ -46,28 +47,33 @@ export async function fetchLinkedStudents(trainerId: string): Promise<LinkedStud
   if (links.length === 0) return [];
 
   const studentIds = links.map((l) => l.student_id);
-  const profiles: any[] = [];
+
+  // Divide array of IDs into chunks of 30 for 'in' operator
+  const chunks: string[][] = [];
+  for (let i = 0; i < studentIds.length; i += 30) {
+    chunks.push(studentIds.slice(i, i + 30));
+  }
+
+  // Fetch profiles, group memberships and the trainer's groups in parallel
+  const profilesPromises = chunks.map(chunk => 
+    getDocs(query(collection(db, "profiles"), where("user_id", "in", chunk)))
+  );
   
-  // Firestore allows up to 30 values in an 'in' query
-  // For larger sets, we'd need to batch, but for a trainer's student list, this is usually enough.
-  for (let i = 0; i < studentIds.length; i += 30) {
-    const chunk = studentIds.slice(i, i + 30);
-    const q = query(collection(db, "profiles"), where("user_id", "in", chunk));
-    const snap = await getDocs(q);
-    profiles.push(...snap.docs.map(d => d.data()));
-  }
+  const membershipsPromises = chunks.map(chunk => 
+    getDocs(query(collection(db, "training_group_members"), where("student_id", "in", chunk)))
+  );
 
-  // Fetch group memberships efficiently
-  const groupMembers: any[] = [];
-  for (let i = 0; i < studentIds.length; i += 30) {
-    const chunk = studentIds.slice(i, i + 30);
-    const q = query(collection(db, "training_group_members"), where("student_id", "in", chunk));
-    const snap = await getDocs(q);
-    groupMembers.push(...snap.docs.map(d => d.data()));
-  }
+  const groupsQuery = query(collection(db, "training_groups"), where("trainer_id", "==", trainerId));
 
-  // Group names mapping (cached or fetched once)
-  const groupsSnap = await getDocs(collection(db, "training_groups"));
+  const [profilesSnaps, membershipsSnaps, groupsSnap] = await Promise.all([
+    Promise.all(profilesPromises),
+    Promise.all(membershipsPromises),
+    getDocs(groupsQuery)
+  ]);
+
+  const profiles = profilesSnaps.flatMap(snap => snap.docs.map(d => d.data()));
+  const groupMembers = membershipsSnaps.flatMap(snap => snap.docs.map(d => d.data()));
+
   const groups = groupsSnap.docs.reduce((acc, d) => {
     acc[d.id] = d.data().name;
     return acc;
@@ -92,26 +98,35 @@ export async function fetchLinkedStudents(trainerId: string): Promise<LinkedStud
 
 export async function fetchAvailableStudents(trainerId: string): Promise<AvailableStudent[]> {
   const linksQuery = query(collection(db, "trainer_students"), where("trainer_id", "==", trainerId));
-  const linksSnap = await getDocs(linksQuery);
-  const linkedIds = linksSnap.docs.map(d => d.data().student_id);
+  const rolesQuery = query(collection(db, "user_roles"), where("role", "==", "student"), limit(100));
   
+  // Parallelize initial queries
+  const [linksSnap, rolesSnap] = await Promise.all([
+    getDocs(linksQuery),
+    getDocs(rolesQuery)
+  ]);
+
+  const linkedIds = linksSnap.docs.map(d => d.data().student_id);
   const excludeIds = [...linkedIds, trainerId];
 
-  const rolesSnap = await getDocs(query(collection(db, "user_roles"), where("role", "==", "student")));
   const studentUserIds = rolesSnap.docs
     .map(d => d.data().user_id)
     .filter(id => !excludeIds.includes(id));
 
   if (studentUserIds.length === 0) return [];
 
-  // Fetch profiles in chunks of 30 to avoid Firestore limits
-  const profiles: AvailableStudent[] = [];
+  // Fetch profiles in parallel chunks of 30
+  const chunks: string[][] = [];
   for (let i = 0; i < studentUserIds.length; i += 30) {
-    const chunk = studentUserIds.slice(i, i + 30);
-    const q = query(collection(db, "profiles"), where("user_id", "in", chunk));
-    const snap = await getDocs(q);
-    profiles.push(...snap.docs.map(d => d.data() as AvailableStudent));
+    chunks.push(studentUserIds.slice(i, i + 30));
   }
+
+  const profilePromises = chunks.map(chunk => 
+    getDocs(query(collection(db, "profiles"), where("user_id", "in", chunk)))
+  );
+  
+  const profilesSnaps = await Promise.all(profilePromises);
+  const profiles = profilesSnaps.flatMap(snap => snap.docs.map(d => d.data() as AvailableStudent));
 
   return profiles;
 }
@@ -162,8 +177,6 @@ export async function unlinkStudent(trainerId: string, studentId: string) {
 }
 
 export async function deleteStudentPermanently(trainerId: string, studentId: string) {
-  // To avoid exceeding the 500 write limit in a single batch, we might execute multiple batches.
-  // But for standard student data, one batch is usually enough. Let's use an array of promises for chunked batching.
   const deleteQueue: any[] = [];
   
   // 1. Collections directly tied to student_id
@@ -179,41 +192,59 @@ export async function deleteStudentPermanently(trainerId: string, studentId: str
     "routines"
   ];
 
-  for (const coll of collections) {
-    // If collection naturally has trainer_id, filter by it. Otherwise just student_id.
+  // 2. Extra queries
+  const qRole = query(collection(db, "user_roles"), where("user_id", "==", studentId));
+  const qAssignments = query(collection(db, "survey_assignments"), where("student_id", "==", studentId));
+
+  // Query all in parallel to minimize roundtrips
+  const queryPromises = collections.map(coll => {
     let q;
     if (["exercise_logs", "exercises", "plan_levels", "trainer_changes", "routine_day_config", "trainer_students", "routines"].includes(coll)) {
        q = query(collection(db, coll), where("student_id", "==", studentId), where("trainer_id", "==", trainerId));
     } else {
        q = query(collection(db, coll), where("student_id", "==", studentId));
     }
-    const snap = await getDocs(q);
-    snap.docs.forEach(d => deleteQueue.push(d.ref));
-  }
+    return getDocs(q);
+  });
 
-  // 2. Survey Assignments and Answers
-  const qAssignments = query(collection(db, "survey_assignments"), where("student_id", "==", studentId));
-  const snapAssignments = await getDocs(qAssignments);
-  
-  if (!snapAssignments.empty) {
-    snapAssignments.docs.forEach(d => deleteQueue.push(d.ref));
+  const [
+    roleSnap,
+    assignmentsSnap,
+    ...collectionsSnaps
+  ] = await Promise.all([
+    getDocs(qRole),
+    getDocs(qAssignments),
+    ...queryPromises
+  ]);
+
+  // Collect documents to delete from collections
+  collectionsSnaps.forEach(snap => {
+    snap.docs.forEach(d => deleteQueue.push(d.ref));
+  });
+
+  // Collect role documents
+  roleSnap.docs.forEach(d => deleteQueue.push(d.ref));
+
+  // Collect survey assignments and query their answers in parallel chunks
+  if (!assignmentsSnap.empty) {
+    assignmentsSnap.docs.forEach(d => deleteQueue.push(d.ref));
     
-    // Get answers for these assignments
-    const assignmentIds = snapAssignments.docs.map(d => d.id);
+    const assignmentIds = assignmentsSnap.docs.map(d => d.id);
+    const answersPromises: Promise<any>[] = [];
     for (let i = 0; i < assignmentIds.length; i += 30) {
       const chunk = assignmentIds.slice(i, i + 30);
       const qAnswers = query(collection(db, "survey_answers"), where("assignment_id", "in", chunk));
-      const snapAnswers = await getDocs(qAnswers);
-      snapAnswers.docs.forEach(d => deleteQueue.push(d.ref));
+      answersPromises.push(getDocs(qAnswers));
     }
+    
+    const answersSnaps = await Promise.all(answersPromises);
+    answersSnaps.forEach(snap => {
+      snap.docs.forEach(d => deleteQueue.push(d.ref));
+    });
   }
 
-  // 3. User Role & Profile
+  // Profile doc
   deleteQueue.push(doc(db, "profiles", studentId));
-  
-  const qRole = query(collection(db, "user_roles"), where("user_id", "==", studentId));
-  const snapRole = await getDocs(qRole);
-  snapRole.docs.forEach(d => deleteQueue.push(d.ref));
 
   // Commit deletes in batches of 500
   for (let i = 0; i < deleteQueue.length; i += 500) {

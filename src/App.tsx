@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,27 +7,29 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
-import AuthPage from "@/pages/AuthPage";
-import StudentsPage from "@/pages/trainer/StudentsPage";
-import StudentDetailPage from "@/pages/trainer/StudentDetailPage";
-import RoutinesPage from "@/pages/trainer/RoutinesPage";
-import PlansPage from "@/pages/trainer/PlansPage";
-import TrackingPage from "@/pages/trainer/TrackingPage";
-import NotificationsPage from "@/pages/trainer/NotificationsPage";
-import TrainingGroupsPage from "@/pages/trainer/TrainingGroupsPage";
-import TrainerSurveysPage from "@/pages/trainer/TrainerSurveysPage";
+import { PageLoader } from "@/components/PageLoader";
 
-import MyPlansPage from "@/pages/student/MyPlansPage";
-import ProgressPage from "@/pages/student/ProgressPage";
-import StudentFeedPage from "@/pages/student/StudentFeedPage";
-import StudentRoutinesPage from "@/pages/student/StudentRoutinesPage";
-import StudentDashboardPage from "@/pages/student/StudentDashboardPage";
-import PersonalChangePage from "@/pages/student/PersonalChangePage";
-import TransformationPage from "@/pages/student/TransformationPage";
+const AuthPage = lazy(() => import("@/pages/AuthPage"));
+const StudentsPage = lazy(() => import("@/pages/trainer/StudentsPage"));
+const StudentDetailPage = lazy(() => import("@/pages/trainer/StudentDetailPage"));
+const RoutinesPage = lazy(() => import("@/pages/trainer/RoutinesPage"));
+const PlansPage = lazy(() => import("@/pages/trainer/PlansPage"));
+const TrackingPage = lazy(() => import("@/pages/trainer/TrackingPage"));
+const NotificationsPage = lazy(() => import("@/pages/trainer/NotificationsPage"));
+const TrainingGroupsPage = lazy(() => import("@/pages/trainer/TrainingGroupsPage"));
+const TrainerSurveysPage = lazy(() => import("@/pages/trainer/TrainerSurveysPage"));
 
-import StudentMealsPage from "@/pages/student/StudentMealsPage";
-import PublicStudentView from "@/pages/PublicStudentView";
-import NotFound from "./pages/NotFound";
+const MyPlansPage = lazy(() => import("@/pages/student/MyPlansPage"));
+const ProgressPage = lazy(() => import("@/pages/student/ProgressPage"));
+const StudentFeedPage = lazy(() => import("@/pages/student/StudentFeedPage"));
+const StudentRoutinesPage = lazy(() => import("@/pages/student/StudentRoutinesPage"));
+const StudentDashboardPage = lazy(() => import("@/pages/student/StudentDashboardPage"));
+const PersonalChangePage = lazy(() => import("@/pages/student/PersonalChangePage"));
+const TransformationPage = lazy(() => import("@/pages/student/TransformationPage"));
+const StudentMealsPage = lazy(() => import("@/pages/student/StudentMealsPage"));
+
+const PublicStudentView = lazy(() => import("@/pages/PublicStudentView"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -41,7 +44,11 @@ function AuthRedirect() {
   const { user, role, loading } = useAuth();
   if (loading) return null;
   if (user) return <Navigate to={role === "trainer" ? "/trainer/students" : "/student/home"} replace />;
-  return <AuthPage />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AuthPage />
+    </Suspense>
+  );
 }
 
 const App = () => (
@@ -55,29 +62,28 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
             <Route path="/auth" element={<AuthRedirect />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/trainer/students" element={<ProtectedRoute requiredRole="trainer"><StudentsPage /></ProtectedRoute>} />
-              <Route path="/trainer/students/:studentId" element={<ProtectedRoute requiredRole="trainer"><StudentDetailPage /></ProtectedRoute>} />
-              <Route path="/trainer/routines" element={<ProtectedRoute requiredRole="trainer"><RoutinesPage /></ProtectedRoute>} />
-              <Route path="/trainer/routines/:studentId" element={<ProtectedRoute requiredRole="trainer"><RoutinesPage /></ProtectedRoute>} />
-              <Route path="/trainer/routines/group/:groupId" element={<ProtectedRoute requiredRole="trainer"><RoutinesPage /></ProtectedRoute>} />
-              <Route path="/trainer/plans" element={<ProtectedRoute requiredRole="trainer"><PlansPage /></ProtectedRoute>} />
-              <Route path="/trainer/tracking" element={<ProtectedRoute requiredRole="trainer"><TrackingPage /></ProtectedRoute>} />
-              <Route path="/trainer/notifications" element={<ProtectedRoute requiredRole="trainer"><NotificationsPage /></ProtectedRoute>} />
-              <Route path="/trainer/groups" element={<ProtectedRoute requiredRole="trainer"><TrainingGroupsPage /></ProtectedRoute>} />
-              <Route path="/trainer/surveys" element={<ProtectedRoute requiredRole="trainer"><TrainerSurveysPage /></ProtectedRoute>} />
-              <Route path="/student/home" element={<ProtectedRoute requiredRole="student"><StudentDashboardPage /></ProtectedRoute>} />
-              <Route path="/student/feed" element={<ProtectedRoute requiredRole="student"><StudentFeedPage /></ProtectedRoute>} />
-              <Route path="/student/routines" element={<ProtectedRoute requiredRole="student"><StudentRoutinesPage /></ProtectedRoute>} />
-
-              <Route path="/student/plans" element={<ProtectedRoute requiredRole="student"><MyPlansPage /></ProtectedRoute>} />
-              <Route path="/student/progress" element={<ProtectedRoute requiredRole="student"><ProgressPage /></ProtectedRoute>} />
-              <Route path="/student/personal-change" element={<ProtectedRoute requiredRole="student"><PersonalChangePage /></ProtectedRoute>} />
-              <Route path="/student/transformation" element={<ProtectedRoute requiredRole="student"><TransformationPage /></ProtectedRoute>} />
-
-              <Route path="/student/meals" element={<ProtectedRoute requiredRole="student"><StudentMealsPage /></ProtectedRoute>} />
+              <Route path="/trainer/students" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><StudentsPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/students/:studentId" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><StudentDetailPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/routines" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><RoutinesPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/routines/:studentId" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><RoutinesPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/routines/group/:groupId" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><RoutinesPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/plans" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><PlansPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/tracking" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><TrackingPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/notifications" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/groups" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><TrainingGroupsPage /></Suspense></ProtectedRoute>} />
+              <Route path="/trainer/surveys" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><TrainerSurveysPage /></Suspense></ProtectedRoute>} />
+              
+              <Route path="/student/home" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentDashboardPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/feed" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentFeedPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/routines" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentRoutinesPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/plans" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><MyPlansPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/progress" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><ProgressPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/personal-change" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><PersonalChangePage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/transformation" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><TransformationPage /></Suspense></ProtectedRoute>} />
+              <Route path="/student/meals" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentMealsPage /></Suspense></ProtectedRoute>} />
             </Route>
-            <Route path="/view/:studentId" element={<PublicStudentView />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/view/:studentId" element={<Suspense fallback={<PageLoader />}><PublicStudentView /></Suspense>} />
+            <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

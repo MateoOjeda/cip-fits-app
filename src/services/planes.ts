@@ -96,8 +96,9 @@ export async function updatePlanAssignment(
   level: string
 ) {
   const batch = writeBatch(db);
+  let hasWrites = false;
 
-  // 1. Deactivate all levels for this plan type
+  // 1. Fetch existing levels for this plan type
   const q = query(
     collection(db, "plan_levels"), 
     where("trainer_id", "==", trainerId), 
@@ -105,13 +106,24 @@ export async function updatePlanAssignment(
     where("plan_type", "==", planType)
   );
   const snap = await getDocs(q);
-  snap.docs.forEach(d => batch.update(d.ref, { unlocked: false }));
 
-  // 2. Unlock specifically the NEW level
+  // 2. Deactivate levels that are currently unlocked and not the target level
+  snap.docs.forEach(d => {
+    const data = d.data();
+    if (data.level !== level && data.unlocked !== false) {
+      batch.update(d.ref, { unlocked: false });
+      hasWrites = true;
+    }
+  });
+
+  // 3. Unlock specifically the NEW level
   if (level !== "none") {
     const existing = snap.docs.find(d => d.data().level === level);
     if (existing) {
-      batch.update(existing.ref, { unlocked: true });
+      if (existing.data().unlocked !== true) {
+        batch.update(existing.ref, { unlocked: true });
+        hasWrites = true;
+      }
     } else {
       const newDocRef = doc(collection(db, "plan_levels"));
       batch.set(newDocRef, {
@@ -123,10 +135,11 @@ export async function updatePlanAssignment(
         content: "",
         created_at: new Date().toISOString()
       });
+      hasWrites = true;
     }
   }
 
-  // 3. Update trainer_students shortcut field
+  // 4. Update trainer_students shortcut field if it actually changes
   const updateField = planType === "entrenamiento" ? "plan_entrenamiento" : "plan_alimentacion";
   const linkQuery = query(
     collection(db, "trainer_students"), 
@@ -135,9 +148,17 @@ export async function updatePlanAssignment(
   );
   const linkSnap = await getDocs(linkQuery);
   if (!linkSnap.empty) {
-    batch.update(linkSnap.docs[0].ref, { [updateField]: level === "none" ? null : level });
+    const docRef = linkSnap.docs[0].ref;
+    const data = linkSnap.docs[0].data();
+    const newValue = level === "none" ? null : level;
+    if (data[updateField] !== newValue) {
+      batch.update(docRef, { [updateField]: newValue });
+      hasWrites = true;
+    }
   }
 
-  await batch.commit();
+  if (hasWrites) {
+    await batch.commit();
+  }
 }
 

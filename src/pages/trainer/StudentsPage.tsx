@@ -104,23 +104,13 @@ export default function StudentsPage() {
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="container-responsive space-y-6 pb-20"
-    >
-      <div className="flex flex-col gap-1 relative z-10">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-          className="text-3xl font-display font-bold tracking-tight text-primary uppercase drop-shadow-md"
-        >
-          Panel del Entrenador
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-          className="text-muted-foreground text-sm"
-        >
-          Gestiona y supervisa a tus alumnos de forma eficiente
-        </motion.p>
+    <div className="max-w-7xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Panel del Entrenador</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gestiona y supervisa a tus alumnos de forma eficiente</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 min-h-[70vh] relative z-10">
@@ -190,6 +180,6 @@ export default function StudentsPage() {
         isCreating={isCreatingProfile}
       />
 
-    </motion.div>
+    </div>
   );
 }

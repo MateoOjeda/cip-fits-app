@@ -18,14 +18,12 @@ export function StudentDetailPanel({ student, onDeleteClick }: StudentDetailPane
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.2 }}
       className="h-full"
     >
-      <Card className="glass-panel overflow-hidden border-primary/10 rounded-3xl h-full flex flex-col shadow-2xl relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-        
+      <Card className="border border-border/50 bg-card rounded-2xl h-full flex flex-col shadow-sm relative overflow-hidden">
         <AnimatePresence mode="wait">
           {!student ? (
             <motion.div 
@@ -33,56 +31,57 @@ export function StudentDetailPanel({ student, onDeleteClick }: StudentDetailPane
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
               className="flex flex-col items-center justify-center flex-1 h-full min-h-[500px] text-center p-8 z-10"
             >
-              <div className="p-6 rounded-full bg-accent/5 border border-accent/10 mb-4 backdrop-blur-sm">
-                <Users className="h-12 w-12 text-accent/40" />
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 mb-4">
+                <Users className="h-10 w-10 text-primary/60" />
               </div>
-              <p className="text-muted-foreground text-sm font-medium">Seleccioná un alumno de la lista para ver su información</p>
+              <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">Detalle del Alumno</p>
+              <p className="text-muted-foreground text-xs mt-1">Selecciona un alumno de la lista para ver su información</p>
             </motion.div>
           ) : (
             <motion.div 
               key={student.user_id}
-              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-              className="p-6 md:p-8 space-y-8 overflow-y-auto max-h-[75vh] flex-1 z-10 hide-scrollbar"
+              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[75vh] flex-1 z-10 hide-scrollbar"
             >
               {/* Profile header */}
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-6 pb-6 border-b border-border/40">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-5 pb-6 border-b border-border/40 relative pr-10">
                 <div 
-                  className="cursor-pointer transition-transform hover:scale-105"
+                  className="cursor-pointer transition-transform hover:scale-102"
                   onClick={() => navigate(`/trainer/students/${student.user_id}`)}
                 >
-                  <Avatar className="h-24 w-24 border-2 border-accent/40 shadow-lg shadow-accent/20">
+                  <Avatar className="h-20 w-20 border-2 border-primary/20 shadow-sm">
                     <AvatarImage src={student.avatar_url || undefined} />
-                    <AvatarFallback className="bg-accent/10 text-accent font-bold text-3xl">
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
                       {student.avatar_initials || (student.display_name || "??").slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-1">
                   <h2 
-                    className="text-3xl font-display font-bold text-primary cursor-pointer hover:opacity-80 transition-opacity drop-shadow-md"
+                    className="text-2xl font-bold tracking-tight text-foreground cursor-pointer hover:text-primary transition-colors"
                     onClick={() => navigate(`/trainer/students/${student.user_id}`)}
                   >
                     {student.display_name}
                   </h2>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <Badge variant="outline" className={`text-xs ${student.paymentStatus === "pagado" ? "border-green-400/50 text-green-600" : "border-orange-400/50 text-orange-600"}`}>
-                      {student.paymentStatus === "pagado" ? "✓ Pagado" : "⏳ No pagado"}
+                    <Badge variant="outline" className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${student.paymentStatus === "pagado" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"}`}>
+                      {student.paymentStatus === "pagado" ? "✓ Pagado" : "⏳ Pendiente"}
                     </Badge>
                     {student.groupName && (
-                      <Badge className="badge-info-tag px-3 py-1 text-[11px] border-none shadow-md shadow-primary/10">
+                      <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[9px] font-bold px-2 py-0.5 border-none shadow-none rounded-md">
                         Grupo: {student.groupName}
                       </Badge>
                     )}
                     {(student.age || student.weight) && (
-                      <div className="flex items-center gap-2 ml-1">
+                      <div className="flex items-center gap-1.5">
                         {student.age && (
-                          <Badge variant="secondary" className="bg-muted/50 text-muted-foreground text-[10px] font-bold px-2 py-0.5">
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] font-bold px-2 py-0.5 border border-border/50 rounded-md">
                             {student.age} años
                           </Badge>
                         )}
                         {student.weight && (
-                          <Badge variant="secondary" className="bg-muted/50 text-muted-foreground text-[10px] font-bold px-2 py-0.5">
-                            {student.weight}kg
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground text-[9px] font-bold px-2 py-0.5 border border-border/50 rounded-md">
+                            {student.weight} kg
                           </Badge>
                         )}
                       </div>
@@ -91,11 +90,11 @@ export function StudentDetailPanel({ student, onDeleteClick }: StudentDetailPane
                 </div>
                 <Button
                   variant="ghost" size="icon"
-                  className="h-10 w-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors absolute top-6 right-6"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors absolute top-0 right-0"
                   onClick={() => onDeleteClick(student)}
                   title="Eliminar alumno permanentemente"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -103,54 +102,54 @@ export function StudentDetailPanel({ student, onDeleteClick }: StudentDetailPane
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Routine section */}
-                <div className="p-5 rounded-2xl bg-card/40 backdrop-blur-sm border border-border/50 shadow-inner flex flex-col justify-between hover:bg-card/60 transition-colors">
+                <div className="p-5 rounded-xl border border-border/40 bg-muted/30 flex flex-col justify-between hover:bg-muted/50 transition-colors">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-accent/10">
-                        <Dumbbell className="h-5 w-5 text-accent" />
+                      <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                        <Dumbbell className="h-4.5 w-4.5" />
                       </div>
-                      <h3 className="font-semibold text-sm">Entrenamiento</h3>
+                      <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Entrenamiento</h3>
                     </div>
                     {student.planEntrenamiento && student.planEntrenamiento !== "none" ? (
-                      <Badge variant="outline" className={`text-xs ${getLevelColor(student.planEntrenamiento)}`}>
-                        Nivel: {PLAN_LEVEL_OPTIONS.find(o => o.value === student.planEntrenamiento)?.label || student.planEntrenamiento}
+                      <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${getLevelColor(student.planEntrenamiento)}`}>
+                        {PLAN_LEVEL_OPTIONS.find(o => o.value === student.planEntrenamiento)?.label || student.planEntrenamiento}
                       </Badge>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Sin rutina asignada</p>
+                      <p className="text-xs text-muted-foreground italic">Sin rutina asignada</p>
                     )}
                   </div>
                   <div className="flex gap-2 mt-6">
-                    <Button variant="outline" size="sm" className="flex-1 h-9 text-xs rounded-xl border-accent/20 hover:bg-accent/10" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
+                    <Button variant="outline" size="sm" className="flex-1 h-9 text-xs rounded-xl font-semibold border-border" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
                       <Eye className="h-3.5 w-3.5 mr-1.5" /> Ver
                     </Button>
-                    <Button size="sm" className="btn-gradient flex-1 h-9 text-xs rounded-xl" onClick={() => navigate(`/trainer/routines/${student.user_id}`)}>
+                    <Button size="sm" className="bg-primary hover:bg-primary/95 text-primary-foreground flex-1 h-9 text-xs rounded-xl font-semibold shadow-sm" onClick={() => navigate(`/trainer/routines/${student.user_id}`)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
                     </Button>
                   </div>
                 </div>
 
                 {/* Meals routine section */}
-                <div className="p-5 rounded-2xl bg-card/40 backdrop-blur-sm border border-border/50 shadow-inner flex flex-col justify-between hover:bg-card/60 transition-colors">
+                <div className="p-5 rounded-xl border border-border/40 bg-muted/30 flex flex-col justify-between hover:bg-muted/50 transition-colors">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-green-500/10">
-                        <Apple className="h-5 w-5 text-green-500" />
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                        <Apple className="h-4.5 w-4.5" />
                       </div>
-                      <h3 className="font-semibold text-sm">Alimentación</h3>
+                      <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Alimentación</h3>
                     </div>
                     {student.planAlimentacion && student.planAlimentacion !== "none" ? (
-                      <Badge variant="outline" className={`text-xs ${getLevelColor(student.planAlimentacion)}`}>
-                        Nivel: {PLAN_LEVEL_OPTIONS.find(o => o.value === student.planAlimentacion)?.label || student.planAlimentacion}
+                      <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${getLevelColor(student.planAlimentacion)}`}>
+                        {PLAN_LEVEL_OPTIONS.find(o => o.value === student.planAlimentacion)?.label || student.planAlimentacion}
                       </Badge>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Sin dieta asignada</p>
+                      <p className="text-xs text-muted-foreground italic">Sin dieta asignada</p>
                     )}
                   </div>
                   <div className="flex gap-2 mt-6">
-                    <Button variant="outline" size="sm" className="flex-1 h-9 text-xs rounded-xl border-green-500/20 hover:bg-green-500/10 text-green-500" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
+                    <Button variant="outline" size="sm" className="flex-1 h-9 text-xs rounded-xl font-semibold border-border" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
                       <Eye className="h-3.5 w-3.5 mr-1.5" /> Ver
                     </Button>
-                    <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white flex-1 h-9 text-xs rounded-xl" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
+                    <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1 h-9 text-xs rounded-xl font-semibold shadow-sm" onClick={() => navigate(`/trainer/students/${student.user_id}`)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
                     </Button>
                   </div>

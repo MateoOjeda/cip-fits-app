@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, deleteDoc } from "firebase/firestore";
+import { doc, deleteDoc } from "firebase/firestore";
+import { useStudentDashboard } from "@/hooks/useStudentDashboard";
+import { useStudentSurveys } from "@/hooks/useStudentSurveys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,6 @@ import {
 import { formatDistanceToNow, addDays, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
-import { fetchStudentPendingSurveys } from "@/services/surveys";
 import { TakeSurveyDialog } from "@/components/student/TakeSurveyDialog";
 import ProfilePhotoUpload from "@/components/ProfilePhotoUpload";
 import { toast } from "sonner";
@@ -62,57 +63,45 @@ const CHANGE_CONFIG: Record<string, { icon: React.ElementType; label: string }> 
 export default function StudentDashboardPage() {
   const { user, displayName } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  
+  const {
+    profile: queryProfile,
+    studentData,
+    notifications: rawNotifications,
+    isLoading: isLoadingDashboard,
+    refetch: refetchDashboard,
+  } = useStudentDashboard(user?.uid);
+
+  const {
+    pendingSurveys,
+    isLoadingPending,
+    refetchPending,
+  } = useStudentSurveys(user?.uid);
+
   const [profile, setProfile] = useState<any>(null);
-  const [studentData, setStudentData] = useState<any>(null);
   const [notifications, setNotifications] = useState<TrainerChange[]>([]);
-  const [pendingSurveys, setPendingSurveys] = useState<PendingSurvey[]>([]);
   const [activeSurvey, setActiveSurvey] = useState<PendingSurvey | null>(null);
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-
-    try {
-      // Fetch Profile
-      const profileSnap = await getDoc(doc(db, "profiles", user.uid));
-      setProfile(profileSnap.data());
-
-      // Fetch trainer link
-      const linksQuery = query(collection(db, "trainer_students"), where("student_id", "==", user.uid));
-      const linksSnap = await getDocs(linksQuery);
-      setStudentData(linksSnap.docs.length > 0 ? linksSnap.docs[0].data() : null);
-
-      // Fetch trainer changes (notifications)
-      const changesQuery = query(
-        collection(db, "trainer_changes"), 
-        where("student_id", "==", user.uid),
-        orderBy("created_at", "desc"),
-        limit(10)
-      );
-      const changesSnap = await getDocs(changesQuery);
-      const rawChanges = changesSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrainerChange));
-
-      // Filter notifications using read state from localStorage
-      const readIdsStr = localStorage.getItem(`read_notifications_${user.uid}`);
-      const readIds = readIdsStr ? JSON.parse(readIdsStr) : [];
-      const activeNotifications = rawChanges.filter((n: any) => !readIds.includes(n.id));
-      
-      setNotifications(activeNotifications);
-
-      // Pending surveys
-      const surveysData = await fetchStudentPendingSurveys(user.uid);
-      setPendingSurveys(surveysData || []);
-    } catch (err) {
-      console.error("Error fetching student dashboard data:", err);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (queryProfile) {
+      setProfile(queryProfile);
     }
-  }, [user]);
+  }, [queryProfile]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (rawNotifications && user) {
+      const readIdsStr = localStorage.getItem(`read_notifications_${user.uid}`);
+      const readIds = readIdsStr ? JSON.parse(readIdsStr) : [];
+      const activeNotifications = rawNotifications.filter((n: any) => !readIds.includes(n.id));
+      setNotifications(activeNotifications);
+    }
+  }, [rawNotifications, user]);
+
+  const refetchAll = async () => {
+    await Promise.all([refetchDashboard(), refetchPending()]);
+  };
+
+  const loading = isLoadingDashboard || isLoadingPending;
 
   if (loading) {
     return (
@@ -133,11 +122,9 @@ export default function StudentDashboardPage() {
   const daysRemaining = Math.max(0, differenceInDays(nextPaymentDate, new Date()));
 
   return (
-    <div className="container-responsive pb-24 space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto pb-24 space-y-8 animate-in fade-in duration-300">
       {/* PROFILE HEADER SECTION */}
-      <div className="relative pt-12">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200%] h-64 bg-gradient-to-b from-primary/10 to-transparent rounded-[100%] opacity-50 -z-10" />
-        
+      <div className="relative pt-6">
         <div className="flex flex-col items-center text-center space-y-4">
           <div className="relative">
             <ProfilePhotoUpload 
@@ -146,23 +133,23 @@ export default function StudentDashboardPage() {
               onUploaded={(url) => setProfile(prev => ({ ...prev, avatar_url: url }))}
             />
             {isPaid && (
-              <div className="absolute -bottom-1 -left-1 h-6 w-6 bg-primary rounded-full border-2 border-background flex items-center justify-center shadow-lg">
-                <Crown className="h-3 w-3 text-white" />
+              <div className="absolute -bottom-0.5 -left-0.5 h-6 w-6 bg-primary rounded-full border-2 border-background flex items-center justify-center shadow-md">
+                <Crown className="h-3.5 w-3.5 text-primary-foreground" />
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-3xl font-display font-black tracking-tight uppercase leading-none">{displayName}</h1>
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-primary font-black text-[10px] uppercase tracking-[0.2em]">{hasPlan ? "Alumno Activo" : "Sin Plan Asignado"}</p>
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
+            <div className="flex flex-col items-center gap-1.5">
+              <p className="text-xs text-muted-foreground font-medium">{hasPlan ? "Alumno Activo" : "Sin Plan Asignado"}</p>
               {pendingSurveys.length > 0 && (
                 <Badge 
-                  className="bg-amber-500/20 text-amber-500 border-amber-500/30 rounded-full text-[10px] font-black px-3 py-1 flex items-center gap-1.5 animate-bounce shadow-lg shadow-amber-500/10 cursor-pointer hover:bg-amber-500/30 transition-colors"
+                  className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-semibold px-3 py-1 flex items-center gap-1.5 cursor-pointer hover:bg-amber-500/15 transition-colors"
                   onClick={() => document.getElementById('encuestas-section')?.scrollIntoView({ behavior: 'smooth' })}
                 >
                   <ClipboardList className="h-3 w-3" />
-                  TIENES ENCUESTAS PENDIENTES
+                  Tienes encuestas pendientes
                 </Badge>
               )}
             </div>
@@ -170,95 +157,93 @@ export default function StudentDashboardPage() {
         </div>
       </div>
       
-
-
       {/* PLAN & PAYMENT SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="card-premium border-white/5 bg-white/[0.02] shadow-xl hover:scale-[1.02] transition-transform duration-300">
+        <Card className="border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-widest text-[10px] font-black">
-                  <CreditCard className="h-3 w-3" />
+                <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-[10px] font-bold">
+                  <CreditCard className="h-3.5 w-3.5" />
                   <span>Estado de Suscripción</span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight">
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
                     {isPaid ? "Mes Abonado" : "Pago Pendiente"}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1.5">
                     {isPaid ? (
-                      <Badge className="bg-primary/20 text-primary border-primary/20 rounded-full text-[10px] font-black px-2 py-0.5">
-                        <CheckCircle2 className="h-3 w-3 mr-1" /> AL DÍA
+                      <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 rounded-full text-[10px] font-bold px-2.5 py-0.5">
+                        <CheckCircle2 className="h-3 w-3 mr-1 inline" /> AL DÍA
                       </Badge>
                     ) : (
-                      <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/20 rounded-full text-[10px] font-black px-2 py-0.5">
-                        <XCircle className="h-3 w-3 mr-1" /> PENDIENTE
+                      <Badge variant="destructive" className="bg-destructive/10 text-destructive border border-destructive/20 rounded-full text-[10px] font-bold px-2.5 py-0.5">
+                        <XCircle className="h-3 w-3 mr-1 inline" /> PENDIENTE
                       </Badge>
                     )}
                   </div>
                 </div>
               </div>
               <div className={cn(
-                "h-14 w-14 rounded-3xl flex items-center justify-center shadow-inner",
-                isPaid ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+                "h-12 w-12 rounded-xl flex items-center justify-center shadow-sm",
+                isPaid ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-destructive/10 text-destructive"
               )}>
-                <CreditCard className="h-7 w-7" />
+                <CreditCard className="h-6 w-6" />
               </div>
             </div>
             
             <Button 
-              variant="ghost" 
-              className="w-full mt-6 btn-premium-outline h-10 gap-2 border-white/10 hover:border-primary/50 group"
+              variant="outline" 
+              className="w-full mt-6 h-9 gap-2 rounded-xl border-border/60 hover:bg-muted/10 transition-all text-xs font-semibold"
               onClick={() => navigate("/student/plans")}
             >
-              <ArrowUpCircle className="h-4 w-4 text-primary group-hover:scale-125 transition-transform" />
-              <span className="uppercase font-black text-xs">Mejorar Plan</span>
+              <ArrowUpCircle className="h-4 w-4 text-primary" />
+              <span>Ver Planes</span>
             </Button>
           </CardContent>
         </Card>
 
         {isPaid ? (
-          <Card className="card-premium border-white/5 bg-white/[0.02] shadow-xl hover:scale-[1.02] transition-transform duration-300">
+          <Card className="border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-widest text-[10px] font-black">
-                    <Clock className="h-3 w-3" />
+                  <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-[10px] font-bold">
+                    <Clock className="h-3.5 w-3.5" />
                     <span>Próximo Vencimiento</span>
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase tracking-tight">
+                    <h3 className="text-lg font-bold tracking-tight text-foreground">
                       {daysRemaining} Días
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1 font-bold">
-                      Faltan para tu próxima renovación
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Restantes de tu ciclo de entrenamiento
                     </p>
                   </div>
                 </div>
-                <div className="h-14 w-14 rounded-3xl bg-secondary/10 flex items-center justify-center text-secondary shadow-inner">
-                  <Clock className="h-7 w-7" />
+                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-sm">
+                  <Clock className="h-6 w-6" />
                 </div>
               </div>
               
-              <div className="mt-8 w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="mt-6 w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] transition-all duration-1000" 
+                  className="h-full bg-primary transition-all duration-500" 
                   style={{ width: `${Math.max(0, Math.min(100, (daysRemaining / 30) * 100))}%` }} 
                 />
               </div>
             </CardContent>
           </Card>
         ) : (
-          <Card className="card-premium border-destructive/20 bg-destructive/5 shadow-xl hover:scale-[1.02] transition-transform duration-300 flex flex-col justify-center">
+          <Card className="border border-destructive/20 bg-destructive/5 dark:bg-destructive/10 shadow-sm rounded-2xl flex flex-col justify-center">
             <CardContent className="p-6 text-center space-y-3">
-              <div className="h-12 w-12 bg-destructive/20 rounded-full flex items-center justify-center mx-auto text-destructive">
-                <CreditCard className="h-6 w-6" />
+              <div className="h-12 w-12 bg-destructive/15 rounded-full flex items-center justify-center mx-auto text-destructive">
+                <CreditCard className="h-5 w-5" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-xl font-black uppercase tracking-tight text-destructive">Renovar mes</h3>
-                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest leading-tight">
-                  Tu suscripción ha vencido. <br />Contacta a tu entrenador para renovar.
+                <h3 className="text-lg font-bold text-destructive">Renovar suscripción</h3>
+                <p className="text-xs text-muted-foreground leading-normal">
+                  Tu periodo de entrenamiento ha finalizado. Ponte en contacto con tu entrenador para renovar el servicio.
                 </p>
               </div>
             </CardContent>
@@ -267,38 +252,38 @@ export default function StudentDashboardPage() {
       </div>
 
       {/* PLAN DETAILS LIST */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] whitespace-nowrap">Planes Activados</span>
-          <div className="h-[1px] w-full bg-white/5" />
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Planes Activados</span>
+          <div className="h-[1px] w-full bg-border/50" />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {studentData?.plan_entrenamiento && (
-            <Card className="bg-white/5 border-white/5 rounded-[1.5rem] p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20">
+            <Card className="bg-card border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition-all">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
                 <Dumbbell className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-muted-foreground uppercase">Entrenamiento</p>
-                <p className="font-bold text-sm truncate uppercase tracking-tight">{studentData.plan_entrenamiento}</p>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Entrenamiento</p>
+                <p className="font-semibold text-sm truncate text-foreground">{studentData.plan_entrenamiento}</p>
               </div>
             </Card>
           )}
           {studentData?.plan_alimentacion && (
-            <Card className="bg-white/5 border-white/5 rounded-[1.5rem] p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-accent/20 flex items-center justify-center text-accent border border-accent/20">
+            <Card className="bg-card border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition-all">
+              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                 <FileText className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-muted-foreground uppercase">Nutrición</p>
-                <p className="font-bold text-sm truncate uppercase tracking-tight">{studentData.plan_alimentacion}</p>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Nutrición</p>
+                <p className="font-semibold text-sm truncate text-foreground">{studentData.plan_alimentacion}</p>
               </div>
             </Card>
           )}
           {!studentData?.plan_entrenamiento && !studentData?.plan_alimentacion && (
-            <Card className="bg-white/5 border-white/5 rounded-[1.5rem] p-6 text-center col-span-full border-dashed">
-              <p className="text-xs font-bold text-muted-foreground uppercase italic opacity-50">No tienes planes asignados actualmente</p>
+            <Card className="bg-card border border-dashed border-border/80 rounded-xl p-6 text-center col-span-full">
+              <p className="text-xs text-muted-foreground font-medium">No tienes planes asignados actualmente</p>
             </Card>
           )}
         </div>
@@ -306,18 +291,18 @@ export default function StudentDashboardPage() {
 
       {/* ENCUESTAS SECTION */}
       <div id="encuestas-section" className="space-y-4 pt-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-8 w-8 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
             <ClipboardList className="h-4 w-4" />
           </div>
-          <h2 className="text-xl font-display font-black tracking-tight uppercase">Encuestas Pendientes</h2>
+          <h2 className="text-lg font-bold tracking-tight text-foreground">Encuestas Pendientes</h2>
         </div>
 
         {pendingSurveys.length === 0 ? (
-          <Card className="card-premium border-white/5 bg-white/5 py-8 opacity-60">
-            <CardContent className="p-0 text-center flex flex-col items-center">
-              <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
+          <Card className="border border-border/40 bg-card py-6 text-center shadow-sm">
+            <CardContent className="p-0 flex flex-col items-center justify-center">
+              <CheckCircle2 className="h-6 w-6 text-emerald-500/70 mb-2" />
+              <p className="text-xs text-muted-foreground font-medium">
                 No tienes encuestas pendientes por el momento
               </p>
             </CardContent>
@@ -327,22 +312,22 @@ export default function StudentDashboardPage() {
             {pendingSurveys.map((asst) => (
               <Card 
                 key={asst.id} 
-                className="card-premium border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all duration-300 rounded-[2rem] p-5 cursor-pointer group shadow-lg hover:scale-[1.01]"
+                className="border border-border/50 bg-card hover:bg-muted/10 transition-all duration-200 rounded-xl p-4 cursor-pointer shadow-sm"
                 onClick={() => setActiveSurvey(asst)}
               >
                 <CardContent className="p-0 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 bg-primary/20 rounded-[1rem] flex items-center justify-center border border-primary/30 group-hover:rotate-6 transition-all duration-300 shadow-md shadow-primary/10">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/20 shrink-0 shadow-sm">
                       <ClipboardList className="h-5 w-5 text-primary" />
                     </div>
-                    <div>
-                      <h3 className="font-black text-base uppercase tracking-tight leading-none mb-1.5">{asst.survey?.title}</h3>
-                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest bg-primary/10 border-primary/20 text-primary px-2.5 py-0.5 rounded-full">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-sm text-foreground truncate leading-tight mb-1">{asst.survey?.title}</h3>
+                      <Badge variant="outline" className="text-[8px] font-bold uppercase tracking-wider bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-500 px-2 py-0.5 rounded-md">
                         Pendiente
                       </Badge>
                     </div>
                   </div>
-                  <Button className="btn-premium-primary h-9 px-5 rounded-xl shadow-md shadow-primary/20 transition-transform active:scale-95 text-xs">
+                  <Button className="h-8 px-4 rounded-lg text-xs font-semibold shrink-0">
                     Responder
                   </Button>
                 </CardContent>
@@ -356,17 +341,17 @@ export default function StudentDashboardPage() {
       <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-secondary/20 flex items-center justify-center text-secondary">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <Bell className="h-4 w-4" />
             </div>
-            <h2 className="text-xl font-display font-black tracking-tight uppercase">Novedades</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">Novedades</h2>
           </div>
           <div className="flex items-center gap-2">
             {notifications.length > 0 && (
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="text-[9px] font-black uppercase text-muted-foreground hover:text-primary h-7 px-2"
+                className="text-[10px] font-bold uppercase text-muted-foreground hover:text-primary h-7 px-2 hover:bg-muted/50"
                 onClick={async () => {
                   const readIdsStr = localStorage.getItem(`read_notifications_${user?.uid}`);
                   const readIds = readIdsStr ? JSON.parse(readIdsStr) : [];
@@ -379,20 +364,19 @@ export default function StudentDashboardPage() {
                 Limpiar todo
               </Button>
             )}
-            <Badge variant="outline" className="rounded-full text-[9px] font-black uppercase text-muted-foreground border-white/10 px-3">
+            <Badge variant="outline" className="rounded-md text-[9px] font-semibold uppercase text-muted-foreground border-border px-2.5 py-0.5">
               Recientes
             </Badge>
           </div>
         </div>
 
         {notifications.length === 0 ? (
-          <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2rem] opacity-40">
-            <Bell className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-            <p className="text-xs font-bold uppercase tracking-widest">Sin novedades por ahora</p>
+          <div className="py-10 text-center border border-dashed border-border rounded-xl bg-card">
+            <Bell className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+            <p className="text-xs text-muted-foreground font-medium">Sin novedades por ahora</p>
           </div>
         ) : (
-          <div className="space-y-3">
-
+          <div className="space-y-2">
             {notifications.map((change) => {
               const config = CHANGE_CONFIG[change.change_type] || { icon: Bell, label: "Aviso" };
               const Icon = config.icon;
@@ -401,11 +385,9 @@ export default function StudentDashboardPage() {
                 e.stopPropagation();
                 try {
                   await deleteDoc(doc(db, "trainer_changes", change.id));
-                  // Also mark as read in localStorage just in case it takes time to reflect
                   const readIdsStr = localStorage.getItem(`read_notifications_${user?.uid}`);
                   const readIds = readIdsStr ? JSON.parse(readIdsStr) : [];
                   localStorage.setItem(`read_notifications_${user?.uid}`, JSON.stringify([...new Set([...readIds, change.id])]));
-                  
                   setNotifications((prev) => prev.filter((n) => n.id !== change.id));
                   toast.success("Notificación eliminada");
                 } catch (err) {
@@ -425,32 +407,32 @@ export default function StudentDashboardPage() {
               return (
                 <Card 
                   key={change.id} 
-                  className="card-premium border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all rounded-[2rem] p-5 group relative"
+                  className="border border-border/40 bg-card hover:bg-muted/10 transition-all rounded-xl p-4 group relative"
                 >
                   <CardContent className="p-0 flex items-start gap-4">
-                    <div className="h-10 w-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0 border border-white/5">
-                      <Icon className="h-5 w-5 text-muted-foreground" />
+                    <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0 pr-16">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">{config.label}</span>
-                        <span className="text-[9px] font-bold text-muted-foreground/50 uppercase">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[9px] font-bold text-primary uppercase tracking-wider">{config.label}</span>
+                        <span className="text-[9px] font-medium text-muted-foreground/75">
                           {formatDistanceToNow(new Date(change.created_at), { addSuffix: true, locale: es })}
                         </span>
                       </div>
-                      <p className="text-[14px] font-bold text-white/90 leading-tight uppercase tracking-tight">
+                      <p className="text-sm font-semibold text-foreground leading-tight">
                         {change.description}
                       </p>
                     </div>
 
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button 
                         size="icon" 
                         variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-white/5"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
                         onClick={handleNavigate}
                       >
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                       <Button 
                         size="icon" 
@@ -458,7 +440,7 @@ export default function StudentDashboardPage() {
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={handleDelete}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </CardContent>
@@ -477,7 +459,7 @@ export default function StudentDashboardPage() {
           assignmentId={activeSurvey.id}
           onCompleted={() => {
             setActiveSurvey(null);
-            fetchData();
+            refetchAll();
           }}
         />
       )}

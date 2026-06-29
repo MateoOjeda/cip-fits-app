@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchStudentProfile, type StudentProfile } from "@/services/alumnos";
@@ -10,13 +10,13 @@ import {
   where, 
   getDocs, 
   doc, 
-  getDoc, 
   updateDoc,
-  orderBy,
-  limit
 } from "firebase/firestore";
-import { fetchArchivedRoutines, fetchRoutineExercises, type Routine } from "@/services/routineManager";
-import { fetchStudentSurveyResults, fetchStudentPendingSurveys } from "@/services/surveys";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useDiagnostic } from "@/hooks/useDiagnostic";
+import { useStudentSurveys } from "@/hooks/useStudentSurveys";
+import { useStudentRoutines } from "@/hooks/useStudentRoutines";
+import { fetchRoutineExercises } from "@/services/routineManager";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ import PersonalDiagnosticTab from "@/components/trainer/PersonalDiagnosticTab";
 import WeightProgressChart from "@/components/trainer/WeightProgressChart";
 import ExerciseHistoryTab from "@/components/trainer/ExerciseHistoryTab";
 import MealsTab from "@/components/trainer/MealsTab";
-import { fetchRoutineData, setRoutineCycleDates } from "@/services/rutinas";
+import { setRoutineCycleDates } from "@/services/rutinas";
 import { toast } from "sonner";
 
 
@@ -51,147 +51,114 @@ export default function StudentDetailPage() {
   const { studentId } = useParams<{ studentId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState("weight");
-  const [paymentPaid, setPaymentPaid] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; planType: string; level: string } | null>(null);
-  const [selectedEntrenamiento, setSelectedEntrenamiento] = useState<string>("none");
-  const [selectedAlimentacion, setSelectedAlimentacion] = useState<string>("none");
   const [editingPlans, setEditingPlans] = useState(false);
-  const [linkId, setLinkId] = useState<string>("");
-  const [routineNextChange, setRoutineNextChange] = useState<string | null>(null);
-  const [routineAssignmentDate, setRoutineAssignmentDate] = useState<string | null>(null);
-  const [archivedRoutines, setArchivedRoutines] = useState<Routine[]>([]);
 
   const [expandedRoutine, setExpandedRoutine] = useState<string | null>(null);
   const [routineExercises, setRoutineExercises] = useState<any[]>([]);
-  const [hasGroupRoutine, setHasGroupRoutine] = useState(false);
-  const [groupExercises, setGroupExercises] = useState<any[]>([]);
   const [selectedDayTab, setSelectedDayTab] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
-  const [surveyResults, setSurveyResults] = useState<any[]>([]);
-  const [pendingSurveys, setPendingSurveys] = useState<any[]>([]);
-  const [diagnosticStatus, setDiagnosticStatus] = useState<{ completed: boolean, date: string | null }>({ completed: false, date: null });
   const [viewingSurvey, setViewingSurvey] = useState<{ type: 'custom' | 'diagnostic', id?: string, data?: any } | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    if (!user || !studentId) return;
-    setLoading(true);
+  // 1. Fetch Student Profile
+  const studentProfileQuery = useQuery({
+    queryKey: ["studentProfile", studentId],
+    queryFn: () => fetchStudentProfile(studentId!),
+    enabled: !!studentId,
+  });
+  const profile = studentProfileQuery.data || null;
 
-    try {
-      const qLink = query(collection(db, "trainer_students"), where("trainer_id", "==", user.uid), where("student_id", "==", studentId));
-      const qLevels = query(collection(db, "plan_levels"), where("trainer_id", "==", user.uid), where("student_id", "==", studentId));
+  // 2. Fetch Trainer Student Link
+  const trainerStudentLinkQuery = useQuery({
+    queryKey: ["trainerStudentLink", user?.uid, studentId],
+    queryFn: async () => {
+      const qLink = query(collection(db, "trainer_students"), where("trainer_id", "==", user?.uid), where("student_id", "==", studentId));
+      const snapLink = await getDocs(qLink);
+      return snapLink.empty ? null : { id: snapLink.docs[0].id, ...snapLink.docs[0].data() as any };
+    },
+    enabled: !!user?.uid && !!studentId,
+  });
+  const linkId = trainerStudentLinkQuery.data?.id || "";
+  const paymentPaid = trainerStudentLinkQuery.data?.payment_status === "pagado";
+
+  // 3. Fetch Plan Levels
+  const planLevelsQuery = useQuery({
+    queryKey: ["planLevels", user?.uid, studentId],
+    queryFn: async () => {
+      const qLevels = query(collection(db, "plan_levels"), where("trainer_id", "==", user?.uid), where("student_id", "==", studentId));
+      const snapLevels = await getDocs(qLevels);
+      return snapLevels.docs.map(d => d.data() as any);
+    },
+    enabled: !!user?.uid && !!studentId,
+  });
+  const pls = planLevelsQuery.data || [];
+  const activeE = pls.find((p: any) => p.plan_type === "entrenamiento" && p.unlocked);
+  const activeA = pls.find((p: any) => p.plan_type === "nutricion" && p.unlocked);
+  const selectedEntrenamiento = activeE ? activeE.level : "none";
+  const selectedAlimentacion = activeA ? activeA.level : "none";
+
+  // 4. Fetch Group Routine Membership
+  const groupMembershipQuery = useQuery({
+    queryKey: ["groupMembership", studentId],
+    queryFn: async () => {
       const qGroupMembers = query(collection(db, "training_group_members"), where("student_id", "==", studentId));
-      
-      const [prof, snapLink, snapLevels, snapGroupMembers] = await Promise.all([
-        fetchStudentProfile(studentId),
-        getDocs(qLink),
-        getDocs(qLevels),
-        getDocs(qGroupMembers)
-      ]);
+      const snapGroupMembers = await getDocs(qGroupMembers);
+      return snapGroupMembers.empty ? null : snapGroupMembers.docs[0].data();
+    },
+    enabled: !!studentId,
+  });
+  const groupId = groupMembershipQuery.data?.group_id;
+  const hasGroupRoutine = !!groupId;
 
-      setProfile(prof);
+  // 5. Fetch Group Exercises
+  const groupExercisesQuery = useQuery({
+    queryKey: ["groupExercises", groupId],
+    queryFn: async () => {
+      if (!groupId) return [];
+      const qGroupExercises = query(collection(db, "group_exercises"), where("group_id", "==", groupId));
+      const snapGroupEx = await getDocs(qGroupExercises);
+      return snapGroupEx.docs.map(d => ({ id: d.id, ...d.data() as any }));
+    },
+    enabled: !!groupId,
+  });
+  const groupExercises = groupExercisesQuery.data || [];
 
-      // Handle Link/Payment
-      if (!snapLink.empty) {
-        const linkDoc = snapLink.docs[0];
-        setLinkId(linkDoc.id);
-        const linkData = linkDoc.data();
-        setPaymentPaid(linkData.payment_status === "pagado");
-      }
+  // 6. Hook useStudentRoutines
+  const {
+    exercises,
+    routineNextChange,
+    routineAssignmentDate,
+    archivedRoutines,
+    isLoading: isLoadingRoutines,
+  } = useStudentRoutines(user?.uid, studentId);
 
-      // Handle Levels
-      const pls = snapLevels.docs.map(d => d.data() as any);
-      const activeE = pls.find((p: any) => p.plan_type === "entrenamiento" && p.unlocked);
-      const activeA = pls.find((p: any) => p.plan_type === "nutricion" && p.unlocked);
-      setSelectedEntrenamiento(activeE ? activeE.level : "none");
-      setSelectedAlimentacion(activeA ? activeA.level : "none");
+  // 7. Hook useStudentSurveys
+  const {
+    pendingSurveys,
+    surveyResults,
+    isLoadingPending: isLoadingSurveysPending,
+    isLoadingResults: isLoadingSurveysResults,
+  } = useStudentSurveys(studentId);
 
-      // Handle Group
-      if (!snapGroupMembers.empty) {
-        const groupId = snapGroupMembers.docs[0].data().group_id;
-        const qGroupExercises = query(collection(db, "group_exercises"), where("group_id", "==", groupId));
-        const snapGroupEx = await getDocs(qGroupExercises);
-        if (!snapGroupEx.empty) {
-          setGroupExercises(snapGroupEx.docs.map(d => ({ id: d.id, ...d.data() })));
-          setHasGroupRoutine(true);
-        } else {
-          setGroupExercises([]);
-          setHasGroupRoutine(false);
-        }
-      } else {
-        setGroupExercises([]);
-        setHasGroupRoutine(false);
-      }
-    } catch (err) {
-      console.error("Error fetching core student data:", err);
-    } finally {
-      setLoading(false);
-      fetchBackgroundData();
+  // 8. Hook useDiagnostic
+  const {
+    diagnosticData,
+    isLoading: isLoadingDiagnostic,
+  } = useDiagnostic(studentId);
+
+  const diagnosticStatus = useMemo(() => {
+    if (diagnosticData) {
+      return { 
+        completed: true, 
+        date: diagnosticData.updated_at || diagnosticData.created_at 
+      };
     }
-  }, [user, studentId]);
+    return { completed: false, date: null };
+  }, [diagnosticData]);
 
-  const fetchBackgroundData = async () => {
-    if (!user || !studentId) return;
-    setLoadingHistory(true);
-    try {
-      const qEx = query(collection(db, "exercises"), where("trainer_id", "==", user.uid), where("student_id", "==", studentId));
-      const qDiag = query(collection(db, "seguimiento_personal"), where("student_id", "==", studentId), orderBy("created_at", "desc"), limit(1));
-      
-      const [snapEx, archived, sResults, pSurveys, diagSnap] = await Promise.all([
-        getDocs(qEx).catch(err => {
-          console.error("Error fetching exercises:", err);
-          return { docs: [] };
-        }),
-        fetchArchivedRoutines(user.uid, studentId).catch(err => {
-          console.error("Error fetching archived routines:", err);
-          return [];
-        }),
-        fetchStudentSurveyResults(studentId).catch(err => {
-          console.error("Error fetching survey results:", err);
-          return [];
-        }),
-        fetchStudentPendingSurveys(studentId).catch(err => {
-          console.error("Error fetching pending surveys:", err);
-          return [];
-        }),
-        getDocs(qDiag).catch(err => {
-          console.error("Error fetching diagnostics (missing index?):", err);
-          return { docs: [], empty: true } as any;
-        })
-      ]);
-
-      setExercises(snapEx.docs.map(d => ({ id: d.id, ...d.data() } as Exercise)));
-      setArchivedRoutines(archived);
-      setSurveyResults(sResults);
-      setPendingSurveys(pSurveys);
-      
-      if (!diagSnap.empty) {
-        setDiagnosticStatus({ 
-          completed: true, 
-          date: diagSnap.docs[0].data().updated_at || diagSnap.docs[0].data().created_at 
-        });
-      } else {
-        setDiagnosticStatus({ completed: false, date: null });
-      }
-
-      // Fetch Routine Cycle Dates
-      const routineData = await fetchRoutineData(user.uid, studentId);
-      if (routineData) {
-        setRoutineNextChange(routineData.routineNextChange);
-        setRoutineAssignmentDate(routineData.routineAssignmentDate || null);
-      }
-    } catch (err) {
-
-      console.error("Error fetching background data:", err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const loading = studentProfileQuery.isLoading || trainerStudentLinkQuery.isLoading || planLevelsQuery.isLoading;
 
   const handleExpandRoutine = async (routineId: string) => {
     if (expandedRoutine === routineId) {
@@ -208,48 +175,67 @@ export default function StudentDetailPage() {
     }
   };
 
-  const handlePaymentToggle = async (checked: boolean) => {
-    if (!linkId) return;
-    setPaymentPaid(checked);
-    try {
+  const togglePaymentMutation = useMutation({
+    mutationFn: async (checked: boolean) => {
+      if (!linkId) return;
       await updateDoc(doc(db, "trainer_students", linkId), { 
         payment_status: checked ? "pagado" : "pendiente",
         updated_at: new Date().toISOString()
       });
+    },
+    onSuccess: (_, checked) => {
+      queryClient.invalidateQueries({ queryKey: ["trainerStudentLink", user?.uid, studentId] });
       toast.success(checked ? "Marcado como pagado" : "Marcado como pendiente");
-    } catch (err) {
+    },
+    onError: () => {
       toast.error("No se pudo actualizar el estado de pago.");
-      setPaymentPaid(!checked);
     }
+  });
+
+  const handlePaymentToggle = (checked: boolean) => {
+    togglePaymentMutation.mutate(checked);
   };
+
+  const updatePlanMutation = useMutation({
+    mutationFn: async ({ planType, level }: { planType: string; level: string }) => {
+      await updatePlanAssignment(user!.uid, studentId!, planType, level);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["planLevels", user?.uid, studentId] });
+      queryClient.invalidateQueries({ queryKey: ["linkedStudents", user?.uid] });
+      toast.success(variables.level === "none" ? "Plan desactivado" : `Plan actualizado a ${LEVEL_LABELS[variables.level] || variables.level}`);
+    },
+    onError: () => {
+      toast.error("Error al actualizar el plan");
+    }
+  });
 
   const handlePlanChangeRequest = (planType: string, level: string) => {
     setConfirmDialog({ open: true, planType, level });
   };
 
   const handlePlanChangeConfirm = async () => {
-    if (!confirmDialog || !user || !studentId) return;
+    if (!confirmDialog) return;
     const { planType, level } = confirmDialog;
     setConfirmDialog(null);
-    try {
-      await updatePlanAssignment(user.uid, studentId, planType, level);
-      if (planType === "entrenamiento") setSelectedEntrenamiento(level);
-      else setSelectedAlimentacion(level);
-      toast.success(level === "none" ? "Plan desactivado" : `Plan actualizado to ${LEVEL_LABELS[level] || level}`);
-      fetchData();
-    } catch { toast.error("Error al actualizar el plan"); }
+    updatePlanMutation.mutate({ planType, level });
   };
 
-  const handleUpdateCycleDates = async (start: string | null, end: string | null) => {
-    if (!user || !studentId) return;
-    try {
-      await setRoutineCycleDates(user.uid, studentId, start, end);
-      setRoutineAssignmentDate(start);
-      setRoutineNextChange(end);
+  const updateCycleMutation = useMutation({
+    mutationFn: async ({ start, end }: { start: string | null; end: string | null }) => {
+      await setRoutineCycleDates(user!.uid, studentId!, start, end);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["routineData", user?.uid, studentId] });
       toast.success("Ciclo de rutina actualizado");
-    } catch (err) {
+    },
+    onError: () => {
       toast.error("Error al actualizar las fechas del ciclo");
     }
+  });
+
+  const handleUpdateCycleDates = (start: string | null, end: string | null) => {
+    updateCycleMutation.mutate({ start, end });
   };
 
 
@@ -264,52 +250,57 @@ export default function StudentDetailPage() {
     );
   }
 
-  const exercisesByDay: Record<string, Exercise[]> = {};
-  exercises.forEach((ex) => {
-    if (!exercisesByDay[ex.day]) exercisesByDay[ex.day] = [];
-    exercisesByDay[ex.day].push(ex);
-  });
+  const { exercisesByDay, groupExercisesByDay } = useMemo(() => {
+    const exercisesByDay: Record<string, Exercise[]> = {};
+    exercises.forEach((ex) => {
+      if (!exercisesByDay[ex.day]) exercisesByDay[ex.day] = [];
+      exercisesByDay[ex.day].push(ex);
+    });
 
-  const groupExercisesByDay: Record<string, any[]> = {};
-  groupExercises.forEach((ex) => {
-    if (!groupExercisesByDay[ex.day]) groupExercisesByDay[ex.day] = [];
-    groupExercisesByDay[ex.day].push(ex);
-  });
+    const groupExercisesByDay: Record<string, any[]> = {};
+    groupExercises.forEach((ex) => {
+      if (!groupExercisesByDay[ex.day]) groupExercisesByDay[ex.day] = [];
+      groupExercisesByDay[ex.day].push(ex);
+    });
+
+    return { exercisesByDay, groupExercisesByDay };
+  }, [exercises, groupExercises]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/trainer/students")}><ArrowLeft className="h-5 w-5" /></Button>
-        <Avatar className="h-14 w-14 border-2 border-primary/30">
-          <AvatarImage src={profile.avatar_url || undefined} />
-          <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
-            {profile.avatar_initials || (profile.display_name || "??").slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">{profile.display_name}</h1>
-          <Badge variant="outline" className={`mt-1 text-xs ${paymentPaid ? "border-green-400/50 text-green-500 bg-green-500/10" : "border-destructive/50 text-destructive bg-destructive/10"}`}>
-            {paymentPaid ? "✓ Pagado" : "✗ No pagado"}
-          </Badge>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={() => navigate("/trainer/students")}><ArrowLeft className="h-4.5 w-4.5" /></Button>
+          <Avatar className="h-12 w-12 border border-border/50 shadow-sm">
+            <AvatarImage src={profile.avatar_url || undefined} />
+            <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
+              {profile.avatar_initials || (profile.display_name || "??").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{profile.display_name}</h1>
+            <Badge variant="outline" className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md ${paymentPaid ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"}`}>
+              {paymentPaid ? "✓ Pagado" : "✗ Pendiente"}
+            </Badge>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1 bg-secondary/20 p-2 rounded-xl border border-border/50">
+        
+        <div className="flex items-center gap-2 bg-muted/40 px-3.5 py-2 rounded-xl border border-border/50">
+          <Label htmlFor="payment-switch-header" className="text-xs font-semibold text-muted-foreground mr-1">
+            Pago:
+          </Label>
           <Switch 
             id="payment-switch-header" 
             checked={paymentPaid} 
             onCheckedChange={handlePaymentToggle}
-            className="data-[state=checked]:bg-green-500" 
+            className="data-[state=checked]:bg-emerald-500" 
           />
-          <Label htmlFor="payment-switch-header" className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">
-            {paymentPaid ? "Pagado" : "Pendiente"}
-          </Label>
         </div>
       </div>
 
-
-
       {/* Plan Assignment with edit lock */}
-      <Card className="card-glass">
+      <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Asignación de Planes</CardTitle>
@@ -362,24 +353,24 @@ export default function StudentDetailPage() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="card-glass neon-border">
+        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-primary">
+            <p className="text-2xl font-bold text-primary">
               {exercises.length > 0 ? Math.round((exercises.filter((e) => e.completed).length / exercises.length) * 100) : 0}%
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Completitud</p>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Completitud</p>
           </CardContent>
         </Card>
-        <Card className="card-glass">
+        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">{exercises.filter((e) => e.completed).length}/{exercises.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Ejercicios</p>
+            <p className="text-2xl font-bold text-foreground">{exercises.filter((e) => e.completed).length}/{exercises.length}</p>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Ejercicios</p>
           </CardContent>
         </Card>
-        <Card className="card-glass">
+        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">{profile.weight ? `${profile.weight}` : "—"}</p>
-            <p className="text-xs text-muted-foreground mt-1">Peso actual (kg)</p>
+            <p className="text-2xl font-bold text-foreground">{profile.weight ? `${profile.weight}` : "—"}</p>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Peso actual (kg)</p>
           </CardContent>
         </Card>
       </div>
@@ -397,14 +388,14 @@ export default function StudentDetailPage() {
           
           return (
             <TabsList 
-              className={`grid w-full bg-secondary/30 p-1 h-auto min-h-[56px]`}
+              className={`grid w-full bg-muted/60 border border-border/50 p-1 h-auto min-h-[52px] rounded-xl`}
               style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
             >
               {tabs.map((tab) => (
                 <TabsTrigger 
                   key={tab.value} 
                   value={tab.value} 
-                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 transition-all shadow-none data-[state=active]:bg-background/50 data-[state=active]:shadow-sm min-w-0"
+                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 transition-all shadow-none data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg min-w-0"
                 >
                   <div className="text-base sm:text-lg h-5 flex items-center justify-center">{tab.icon}</div>
                   <span className={`text-[9px] sm:text-[10px] truncate w-full text-center ${activeTab === tab.value ? "font-bold text-primary" : "text-muted-foreground"}`}>
@@ -430,9 +421,9 @@ export default function StudentDetailPage() {
         </TabsContent>
 
         <TabsContent value="routine">
-          <Card className="card-glass">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
+          <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/40 p-4">
+              <CardTitle className="text-base flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Dumbbell className="h-5 w-5 text-primary" />
                   Rutina Asignada
@@ -491,8 +482,13 @@ export default function StudentDetailPage() {
 
         <TabsContent value="group_routine">
           {hasGroupRoutine && (
-            <Card className="card-glass">
-              <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5 text-accent" />Rutina de Grupo</CardTitle></CardHeader>
+            <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
+              <CardHeader className="pb-3 border-b border-border/40 p-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-5 w-5 text-accent" />
+                  Rutina de Grupo
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-7 gap-1">
                   {DAYS.map((day, i) => {
@@ -560,7 +556,7 @@ export default function StudentDetailPage() {
               {viewingSurvey.type === 'diagnostic' ? (
                 <PersonalDiagnosticTab studentId={studentId} />
               ) : (
-                <Card className="card-glass">
+                <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{viewingSurvey.data.survey?.title || "Encuesta"}</CardTitle>
@@ -600,8 +596,9 @@ export default function StudentDetailPage() {
               <h3 className="text-sm font-semibold mb-1 px-1">Seguimiento y Encuestas</h3>
               
               {/* Diagnóstico Inicial */}
-              <div 
-                className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 cursor-pointer hover:bg-secondary/40 transition-colors"
+              <button 
+                type="button"
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
                 onClick={() => setViewingSurvey({ type: 'diagnostic' })}
               >
                 <div className="flex items-center gap-3">
@@ -621,7 +618,7 @@ export default function StudentDetailPage() {
                   </Badge>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
-              </div>
+              </button>
 
               {/* Encuestas Personalizadas */}
               {[...pendingSurveys, ...surveyResults].length === 0 ? (
@@ -633,9 +630,10 @@ export default function StudentDetailPage() {
                 <div className="space-y-2">
                   {/* Pending Surveys */}
                   {pendingSurveys.map((item: any) => (
-                    <div 
+                    <button 
                       key={item.id}
-                      className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 cursor-pointer hover:bg-secondary/40 transition-colors"
+                      type="button"
+                      className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
                       onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
                     >
                       <div className="flex items-center gap-3">
@@ -653,14 +651,15 @@ export default function StudentDetailPage() {
                         </Badge>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    </div>
+                    </button>
                   ))}
 
                   {/* Completed Surveys */}
                   {surveyResults.map((item: any) => (
-                    <div 
+                    <button 
                       key={item.id}
-                      className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 cursor-pointer hover:bg-secondary/40 transition-colors"
+                      type="button"
+                      className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
                       onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
                     >
                       <div className="flex items-center gap-3">
@@ -680,7 +679,7 @@ export default function StudentDetailPage() {
                         </Badge>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

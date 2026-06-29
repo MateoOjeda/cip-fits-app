@@ -1,11 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  fetchGlobalPlans,
-  saveGlobalPlan,
-  toggleGlobalPlanActive,
-  type GlobalPlan,
-} from "@/services/planes";
+import { type GlobalPlan } from "@/services/planes";
+import { useGlobalPlans } from "@/hooks/useGlobalPlans";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -16,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, ChevronDown, ChevronUp, DollarSign, Apple, Dumbbell, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { LEVELS, LEVEL_LABELS, formatPrice } from "@/lib/planConstants";
+import { cn } from "@/lib/utils";
 
 const PLAN_TYPES_CONFIG = [
   { key: "nutricion", label: "Plan de Alimentación", shortLabel: "Alimentación", icon: Apple },
@@ -24,28 +21,31 @@ const PLAN_TYPES_CONFIG = [
 
 export default function PlansPage() {
   const { user } = useAuth();
+  
+  const { 
+    plans: queryPlans, 
+    cambioFisico: queryCambioFisico, 
+    isLoading: loading,
+    savePlan,
+    togglePlan 
+  } = useGlobalPlans(user?.uid);
+
   const [globalPlans, setGlobalPlans] = useState<GlobalPlan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cambioFisico, setCambioFisico] = useState<GlobalPlan | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
-  const [cambioFisico, setCambioFisico] = useState<GlobalPlan | null>(null);
 
-  const loadPlans = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const data = await fetchGlobalPlans(user.uid);
-      setGlobalPlans(data.plans);
-      setCambioFisico(data.cambioFisico);
-    } catch (error) {
-      toast.error("Error cargando planes. Verificá tu permisos.");
-      console.error(error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (queryPlans) {
+      setGlobalPlans(queryPlans);
     }
-  }, [user]);
+  }, [queryPlans]);
 
-  useEffect(() => { loadPlans(); }, [loadPlans]);
+  useEffect(() => {
+    if (queryCambioFisico) {
+      setCambioFisico(queryCambioFisico);
+    }
+  }, [queryCambioFisico]);
 
   const updateField = (id: string, field: keyof GlobalPlan, value: any) => {
     setGlobalPlans((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
@@ -56,7 +56,7 @@ export default function PlansPage() {
     const plan = globalPlans.find((p) => p.id === id) || (cambioFisico?.id === id ? cambioFisico : null);
     if (!plan) { setSaving(null); return; }
     try {
-      await saveGlobalPlan(plan);
+      await savePlan(plan);
       toast.success("Plan guardado — se actualiza para todos los alumnos automáticamente");
     } catch { toast.error("Error al guardar plan"); }
     setSaving(null);
@@ -65,7 +65,7 @@ export default function PlansPage() {
   const handleToggleActive = async (id: string, current: boolean) => {
     updateField(id, "active", !current);
     try {
-      await toggleGlobalPlanActive(id, !current);
+      await togglePlan({ id, active: !current });
       toast.success(!current ? "Plan activado" : "Plan desactivado");
     } catch {
       toast.error("Error al actualizar");
@@ -76,10 +76,13 @@ export default function PlansPage() {
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Gestión de Planes</h1>
-        <p className="text-muted-foreground text-sm mt-1">Editá contenido y precios. Los cambios se reflejan automáticamente en todos los alumnos.</p>
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Gestión de Planes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Edita contenido y precios de planes globales. Los cambios se sincronizan en tiempo real.</p>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -90,13 +93,13 @@ export default function PlansPage() {
           const activeCount = levels.filter((l) => l.active).length;
 
           return (
-            <Card key={pt.key} className="card-glass overflow-hidden">
-              <CardHeader className="cursor-pointer hover:bg-secondary/20 transition-colors" onClick={() => setExpandedPlan(isExpanded ? null : pt.key)}>
+            <Card key={pt.key} className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-4 border-b border-border/50" onClick={() => setExpandedPlan(isExpanded ? null : pt.key)}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center"><Icon className="h-5 w-5 text-primary" /></div>
+                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Icon className="h-5 w-5 text-primary" /></div>
                     <div>
-                      <CardTitle className="text-sm">{pt.label}</CardTitle>
+                      <CardTitle className="text-sm font-bold text-foreground">{pt.label}</CardTitle>
                       <p className="text-xs text-muted-foreground mt-0.5">{activeCount} nivel{activeCount !== 1 ? "es" : ""} activo{activeCount !== 1 ? "s" : ""}</p>
                     </div>
                   </div>
@@ -104,28 +107,31 @@ export default function PlansPage() {
                 </div>
               </CardHeader>
               {isExpanded && (
-                <CardContent className="space-y-4 pt-0">
+                <CardContent className="space-y-4 p-4">
                   {LEVELS.map((level) => {
                     const pl = levels.find((p) => p.level === level);
                     if (!pl) return null;
                     return (
-                      <div key={pl.id} className={`rounded-lg border p-4 space-y-3 transition-all ${pl.active ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/10 opacity-60"}`}>
+                      <div key={pl.id} className={cn(
+                        "rounded-xl border p-4 space-y-3 transition-all",
+                        pl.active ? "border-primary/20 bg-primary/5" : "border-border/60 bg-muted/20 opacity-70"
+                      )}>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold">{LEVEL_LABELS[level]}</span>
-                            <Badge variant="outline" className={`text-[10px] ${pl.active ? "border-green-400/50 text-green-600 bg-green-500/10" : "border-border text-muted-foreground"}`}>{pl.active ? "Activo" : "Inactivo"}</Badge>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-foreground">{LEVEL_LABELS[level]}</span>
+                            <Badge variant="outline" className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${pl.active ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground"}`}>{pl.active ? "Activo" : "Inactivo"}</Badge>
                           </div>
                           <Switch checked={pl.active} onCheckedChange={() => handleToggleActive(pl.id, pl.active)} />
                         </div>
                         <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-accent" />
+                          <DollarSign className="h-4 w-4 text-primary" />
                           <Label className="text-xs text-muted-foreground">Precio:</Label>
-                          <Input type="number" value={pl.price} onChange={(e) => updateField(pl.id, "price", parseFloat(e.target.value) || 0)} className="h-8 w-32 text-sm bg-secondary/30 border-border" />
-                          <span className="text-xs text-muted-foreground">{formatPrice(pl.price)}</span>
+                          <Input type="number" value={pl.price} onChange={(e) => updateField(pl.id, "price", parseFloat(e.target.value) || 0)} className="h-8 w-32 text-xs font-semibold bg-muted/40 border-border/50 rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" />
+                          <span className="text-xs font-bold text-foreground">{formatPrice(pl.price)}</span>
                         </div>
-                        <Textarea placeholder={`Contenido de ${pt.shortLabel} - ${LEVEL_LABELS[level]}...`} value={pl.content} onChange={(e) => updateField(pl.id, "content", e.target.value)} className="bg-secondary/30 border-border min-h-[100px] text-sm" />
-                        <Button size="sm" variant="outline" className="gap-2" onClick={() => handleSave(pl.id)} disabled={saving === pl.id}>
-                          {saving === pl.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Guardar
+                        <Textarea placeholder={`Contenido de ${pt.shortLabel} - ${LEVEL_LABELS[level]}...`} value={pl.content} onChange={(e) => updateField(pl.id, "content", e.target.value)} className="bg-muted/30 border-border/50 min-h-[100px] text-xs rounded-xl" />
+                        <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg text-xs font-semibold" onClick={() => handleSave(pl.id)} disabled={saving === pl.id}>
+                          {saving === pl.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Guardar Nivel
                         </Button>
                       </div>
                     );
@@ -138,13 +144,13 @@ export default function PlansPage() {
 
         {/* Cambio Físico */}
         {cambioFisico && (
-          <Card className="card-glass overflow-hidden">
-            <CardHeader className="cursor-pointer hover:bg-secondary/20 transition-colors" onClick={() => setExpandedPlan(expandedPlan === "cambios_fisicos" ? null : "cambios_fisicos")}>
+          <Card className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-4 border-b border-border/50" onClick={() => setExpandedPlan(expandedPlan === "cambios_fisicos" ? null : "cambios_fisicos")}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center"><TrendingUp className="h-5 w-5 text-primary" /></div>
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><TrendingUp className="h-5 w-5 text-primary" /></div>
                   <div>
-                    <CardTitle className="text-sm">Cambio Físico</CardTitle>
+                    <CardTitle className="text-sm font-bold text-foreground">Cambio Físico</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">Plan integral: alimentación + rutina</p>
                   </div>
                 </div>
@@ -152,27 +158,30 @@ export default function PlansPage() {
               </div>
             </CardHeader>
             {expandedPlan === "cambios_fisicos" && (
-              <CardContent className="space-y-4 pt-0">
-                <div className={`rounded-lg border p-4 space-y-3 ${cambioFisico.active ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/10 opacity-60"}`}>
+              <CardContent className="space-y-4 p-4">
+                <div className={cn(
+                  "rounded-xl border p-4 space-y-3",
+                  cambioFisico.active ? "border-primary/20 bg-primary/5" : "border-border/60 bg-muted/20 opacity-70"
+                )}>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Estado</span>
+                    <span className="text-xs font-bold text-foreground">Estado</span>
                     <Switch checked={cambioFisico.active} onCheckedChange={async (v) => {
                       setCambioFisico({ ...cambioFisico, active: v });
-                      try { await toggleGlobalPlanActive(cambioFisico.id, v); } catch { setCambioFisico({ ...cambioFisico, active: !v }); }
+                      try { await togglePlan({ id: cambioFisico.id, active: v }); } catch { setCambioFisico({ ...cambioFisico, active: !v }); }
                     }} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-accent" />
+                    <DollarSign className="h-4 w-4 text-primary" />
                     <Label className="text-xs text-muted-foreground">Precio:</Label>
-                    <Input type="number" value={cambioFisico.price} onChange={(e) => setCambioFisico({ ...cambioFisico, price: parseFloat(e.target.value) || 0 })} className="h-8 w-32 text-sm bg-secondary/30 border-border" />
-                    <span className="text-xs text-muted-foreground">{formatPrice(cambioFisico.price)}</span>
+                    <Input type="number" value={cambioFisico.price} onChange={(e) => setCambioFisico({ ...cambioFisico, price: parseFloat(e.target.value) || 0 })} className="h-8 w-32 text-xs font-semibold bg-muted/40 border-border/50 rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" />
+                    <span className="text-xs font-bold text-foreground">{formatPrice(cambioFisico.price)}</span>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">Qué incluye el cambio físico</Label>
-                    <Textarea placeholder="Describe qué incluye el plan de cambio físico..." value={cambioFisico.content} onChange={(e) => setCambioFisico({ ...cambioFisico, content: e.target.value })} className="bg-secondary/30 border-border min-h-[120px] text-sm mt-1" />
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Qué incluye el cambio físico</Label>
+                    <Textarea placeholder="Describe qué incluye el plan de cambio físico..." value={cambioFisico.content} onChange={(e) => setCambioFisico({ ...cambioFisico, content: e.target.value })} className="bg-muted/30 border-border/50 min-h-[120px] text-xs mt-1 rounded-xl" />
                   </div>
-                  <Button size="sm" variant="outline" className="gap-2" onClick={() => handleSave(cambioFisico.id)} disabled={saving === cambioFisico.id}>
-                    {saving === cambioFisico.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Guardar
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg text-xs font-semibold" onClick={() => handleSave(cambioFisico.id)} disabled={saving === cambioFisico.id}>
+                    {saving === cambioFisico.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Guardar
                   </Button>
                 </div>
               </CardContent>

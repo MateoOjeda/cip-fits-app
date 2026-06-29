@@ -14,6 +14,10 @@ import {
   orderBy
 } from "firebase/firestore";
 
+// Simple in-memory cache to minimize Firestore read operations on static definitions
+const surveyCache = new Map<string, any>();
+const questionsCache = new Map<string, any[]>();
+
 export interface SurveyQuestion {
   id: string;
   survey_id: string;
@@ -150,20 +154,31 @@ export async function removeSurveyAssignment(surveyId: string, studentId: string
 }
 
 export async function deleteSurvey(surveyId: string) {
-  const batch = writeBatch(db);
-  
-  // Delete survey
-  batch.delete(doc(db, "custom_surveys", surveyId));
-  
-  // Delete associated questions
-  const qSnap = await getDocs(query(collection(db, "survey_questions"), where("survey_id", "==", surveyId)));
-  qSnap.docs.forEach(d => batch.delete(d.ref));
-  
-  // Delete associated assignments
-  const aSnap = await getDocs(query(collection(db, "survey_assignments"), where("survey_id", "==", surveyId)));
-  aSnap.docs.forEach(d => batch.delete(d.ref));
+  // Invalidate cache
+  surveyCache.delete(surveyId);
+  questionsCache.delete(surveyId);
 
-  await batch.commit();
+  const deleteQueue: any[] = [];
+  
+  // 1. Add survey doc ref
+  deleteQueue.push(doc(db, "custom_surveys", surveyId));
+  
+  // 2. Fetch associated questions and assignments in parallel
+  const [qSnap, aSnap] = await Promise.all([
+    getDocs(query(collection(db, "survey_questions"), where("survey_id", "==", surveyId))),
+    getDocs(query(collection(db, "survey_assignments"), where("survey_id", "==", surveyId)))
+  ]);
+  
+  qSnap.docs.forEach(d => deleteQueue.push(d.ref));
+  aSnap.docs.forEach(d => deleteQueue.push(d.ref));
+
+  // 3. Commit deletes in batches of 500
+  for (let i = 0; i < deleteQueue.length; i += 500) {
+    const batch = writeBatch(db);
+    const chunk = deleteQueue.slice(i, i + 500);
+    chunk.forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
 }
 
 export async function fetchSurveyAnswers(surveyId: string) {
@@ -263,22 +278,44 @@ export async function fetchStudentSurveyResults(studentId: string) {
 
   // Fetch only needed surveys, questions and answers
   // We use batching/parallelization for larger sets, but for 10 ids "in" works fine
+  const targetSurveyIds = surveyIds.slice(0, 10);
+  const targetAssignmentIds = assignmentIds.slice(0, 10);
+
+  // Find missing survey definitions from cache
+  const missingSurveyIds = targetSurveyIds.filter(id => !surveyCache.has(id));
+  const missingQuestionSurveyIds = targetSurveyIds.filter(id => !questionsCache.has(id));
+
   const [surveysSnap, questionsSnap, answersSnap] = await Promise.all([
-    getDocs(query(collection(db, "custom_surveys"), where("__name__", "in", surveyIds.slice(0, 10)))),
-    getDocs(query(collection(db, "survey_questions"), where("survey_id", "in", surveyIds.slice(0, 10)))),
-    getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", assignmentIds.slice(0, 10))))
+    missingSurveyIds.length > 0
+      ? getDocs(query(collection(db, "custom_surveys"), where("__name__", "in", missingSurveyIds)))
+      : Promise.resolve({ docs: [] }),
+    missingQuestionSurveyIds.length > 0
+      ? getDocs(query(collection(db, "survey_questions"), where("survey_id", "in", missingQuestionSurveyIds)))
+      : Promise.resolve({ docs: [] }),
+    getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", targetAssignmentIds)))
   ]);
 
-  const allSurveys = surveysSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-  const allQuestions = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+  // Update caches
+  surveysSnap.docs.forEach(d => {
+    surveyCache.set(d.id, { id: d.id, ...d.data() });
+  });
+  if (missingQuestionSurveyIds.length > 0) {
+    const fetchedQs = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    missingQuestionSurveyIds.forEach(id => {
+      const qs = fetchedQs.filter((q: any) => q.survey_id === id);
+      questionsCache.set(id, qs);
+    });
+  }
+
   const allAnswers = answersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
   return assignments.map((a: any) => {
-    const survey = allSurveys.find((s: any) => s.id === a.survey_id);
+    if (!targetSurveyIds.includes(a.survey_id)) return null;
+
+    const survey = surveyCache.get(a.survey_id);
     if (!survey) return null;
 
-    const questions = allQuestions
-      .filter((q: any) => q.survey_id === survey.id)
+    const questions = [...(questionsCache.get(survey.id) || [])]
       .sort((x: any, y: any) => x.order_index - y.order_index);
 
     return {

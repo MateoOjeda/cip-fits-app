@@ -1,41 +1,11 @@
-import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Sparkles, Loader2 } from "lucide-react";
 import MealsTab from "@/components/trainer/MealsTab";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { useStudentMeals } from "@/hooks/useStudentMeals";
 
 export default function StudentMealsPage() {
   const { user } = useAuth();
-  const [nutritionLevel, setNutritionLevel] = useState<string>("principiante");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchLevel() {
-      if (!user) return;
-      
-      try {
-        const q = query(
-          collection(db, "plan_levels"),
-          where("student_id", "==", user.uid),
-          where("plan_type", "==", "nutricion"),
-          where("unlocked", "==", true),
-          limit(1)
-        );
-        const snap = await getDocs(q);
-        
-        if (!snap.empty) {
-          setNutritionLevel(snap.docs[0].data().level);
-        }
-      } catch (err) {
-        console.error("Error fetching nutrition level:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    fetchLevel();
-  }, [user]);
+  const { nutritionLevel, isLoadingNutritionLevel: loading } = useStudentMeals(user?.uid);
 
   if (loading) {
     return (
@@ -46,20 +16,17 @@ export default function StudentMealsPage() {
   }
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 sm:p-6 pb-32 animate-in fade-in duration-750">
-      <div className="mb-10 text-center sm:text-left relative">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-3 relative z-10">
-          <h1 className="text-4xl sm:text-5xl font-display font-black tracking-tighter uppercase italic">
-            Mis <span className="text-primary italic-none">Comidas</span>
-          </h1>
-          <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full w-fit mx-auto sm:mx-0">
-            <Sparkles className="h-3 w-3 text-primary animate-pulse" />
-            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Plan Nutricional</span>
-          </div>
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mi Plan de Alimentación</h1>
+          <p className="text-sm text-muted-foreground mt-1">Sigue tu dieta personalizada y consulta tus opciones de comida</p>
         </div>
-        <p className="text-muted-foreground text-sm max-w-lg mx-auto sm:mx-0 font-medium leading-relaxed">
-          Sigue tu plan de alimentación diseñado para maximizar tus resultados y mantener tu energía al máximo.
-        </p>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Nutrición</span>
+        </div>
       </div>
 
       {user && (

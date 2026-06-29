@@ -11,7 +11,6 @@ import {
   addDoc, 
   orderBy, 
   limit,
-  Timestamp
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +21,7 @@ import { Camera, Loader2, ImageIcon, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface Transformation {
   id: string;
@@ -172,57 +172,64 @@ export default function TransformationPage() {
   const formatDate = (d: string | null) => d ? format(new Date(d), "dd MMM yyyy", { locale: es }) : "—";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight neon-text uppercase">Evolución Visual</h1>
-        <p className="text-muted-foreground text-sm mt-1">Sube tus fotos de progreso para comparar tu antes y después</p>
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mi Transformación</h1>
+          <p className="text-sm text-muted-foreground mt-1">Sube tus fotos de progreso para comparar tu antes y después</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
+          <Camera className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Evolución</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Before */}
-        <Card className="card-glass neon-border">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <Card className="border border-border/50 bg-card rounded-2xl shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 border-b border-border/40 p-4 bg-muted/20">
+            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
               <Camera className="h-4 w-4 text-primary" /> Antes
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="aspect-[3/4] rounded-lg bg-secondary/30 overflow-hidden flex items-center justify-center">
+          <CardContent className="space-y-4 p-5">
+            <div className="aspect-[3/4] rounded-xl bg-muted/40 border border-border/40 overflow-hidden flex items-center justify-center relative">
               {transformation?.before_photo_url ? (
                 <img src={transformation.before_photo_url} alt="Antes" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center text-muted-foreground">
-                   <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                   <p className="text-xs">Sin foto</p>
+                   <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                   <p className="text-xs font-medium">Sin foto cargada</p>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <Label className="text-xs text-muted-foreground">Peso (kg)</Label>
-                <div className="flex gap-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Peso (kg)</Label>
+                <div className="flex gap-1.5 mt-1">
                    <Input
                      type="number"
                      step="0.1"
                      value={beforeWeight}
                      onChange={(e) => setBeforeWeight(e.target.value)}
                      placeholder="Peso"
-                     className="bg-secondary/50 border-border h-8 text-sm"
+                     className="bg-muted/30 border-border/60 h-8 text-xs font-semibold rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                    />
                    {transformation && (
-                     <Button size="sm" variant="outline" className="h-8" onClick={() => saveWeight("before")}>
+                     <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => saveWeight("before")}>
                        OK
                      </Button>
                    )}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground text-right">
+              <div className="text-[11px] font-semibold text-muted-foreground text-right pt-4">
                  {formatDate(transformation?.before_date || null)}
               </div>
             </div>
             <label className="block">
               <input type="file" accept="image/*" className="hidden" onChange={handleFileChange("before")} />
-              <Button variant="outline" className="w-full" asChild disabled={uploading === "before"}>
+              <Button variant="outline" className="w-full h-10 rounded-xl text-xs font-semibold" asChild disabled={uploading === "before"}>
                 <span className="cursor-pointer">
                    {uploading === "before" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Camera className="h-4 w-4 mr-2" />}
                    {transformation?.before_photo_url ? "Cambiar foto" : "Subir foto Antes"}
@@ -233,49 +240,49 @@ export default function TransformationPage() {
         </Card>
 
         {/* After */}
-        <Card className="card-glass neon-border">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <Card className="border border-border/50 bg-card rounded-2xl shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 border-b border-border/40 p-4 bg-muted/20">
+            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
               <Camera className="h-4 w-4 text-primary" /> Después
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="aspect-[3/4] rounded-lg bg-secondary/30 overflow-hidden flex items-center justify-center">
+          <CardContent className="space-y-4 p-5">
+            <div className="aspect-[3/4] rounded-xl bg-muted/40 border border-border/40 overflow-hidden flex items-center justify-center relative">
               {transformation?.after_photo_url ? (
                 <img src={transformation.after_photo_url} alt="Después" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center text-muted-foreground">
-                   <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                   <p className="text-xs">Sin foto</p>
+                   <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                   <p className="text-xs font-medium">Sin foto cargada</p>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <Label className="text-xs text-muted-foreground">Peso (kg)</Label>
-                <div className="flex gap-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Peso (kg)</Label>
+                <div className="flex gap-1.5 mt-1">
                    <Input
                      type="number"
                      step="0.1"
                      value={afterWeight}
                      onChange={(e) => setAfterWeight(e.target.value)}
                      placeholder="Peso"
-                     className="bg-secondary/50 border-border h-8 text-sm"
+                     className="bg-muted/30 border-border/60 h-8 text-xs font-semibold rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                    />
                    {transformation && (
-                     <Button size="sm" variant="outline" className="h-8" onClick={() => saveWeight("after")}>
+                     <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => saveWeight("after")}>
                        OK
                      </Button>
                    )}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground text-right">
+              <div className="text-[11px] font-semibold text-muted-foreground text-right pt-4">
                  {formatDate(transformation?.after_date || null)}
               </div>
             </div>
             <label className="block">
               <input type="file" accept="image/*" className="hidden" onChange={handleFileChange("after")} />
-              <Button variant="outline" className="w-full" asChild disabled={uploading === "after"}>
+              <Button variant="outline" className="w-full h-10 rounded-xl text-xs font-semibold" asChild disabled={uploading === "after"}>
                 <span className="cursor-pointer">
                    {uploading === "after" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Camera className="h-4 w-4 mr-2" />}
                    {transformation?.after_photo_url ? "Cambiar foto" : "Subir foto Después"}
@@ -287,21 +294,21 @@ export default function TransformationPage() {
       </div>
 
       {transformation?.before_photo_url && transformation?.after_photo_url && (
-        <Card className="card-glass neon-border neon-glow">
-          <CardContent className="p-6 text-center">
-            <div className="flex items-center justify-center gap-4">
+        <Card className="border border-border/50 bg-card rounded-2xl shadow-sm">
+          <CardContent className="p-5 text-center">
+            <div className="flex items-center justify-center gap-6">
               <div className="text-right">
-                 <p className="text-2xl font-bold">{transformation.before_weight || "—"} kg</p>
-                 <p className="text-xs text-muted-foreground">{formatDate(transformation.before_date)}</p>
+                 <p className="text-xl font-bold text-foreground">{transformation.before_weight || "—"} kg</p>
+                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{formatDate(transformation.before_date)}</p>
               </div>
-              <ArrowRight className="h-6 w-6 text-primary" />
+              <ArrowRight className="h-5 w-5 text-primary animate-pulse" />
               <div className="text-left">
-                 <p className="text-2xl font-bold text-primary">{transformation.after_weight || "—"} kg</p>
-                 <p className="text-xs text-muted-foreground">{formatDate(transformation.after_date)}</p>
+                 <p className="text-xl font-bold text-primary">{transformation.after_weight || "—"} kg</p>
+                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{formatDate(transformation.after_date)}</p>
               </div>
             </div>
             {transformation.before_weight && transformation.after_weight && (
-              <p className="text-sm text-muted-foreground mt-3">
+              <p className="text-xs text-muted-foreground mt-4 font-medium">
                  Diferencia: <span className="font-bold text-primary">
                    {(transformation.after_weight - transformation.before_weight).toFixed(1)} kg
                  </span>

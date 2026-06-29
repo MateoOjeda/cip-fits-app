@@ -58,16 +58,16 @@ export default function ProfilePhotoUpload({ avatarUrl, initials, onUploaded, si
 
   return (
     <div className="relative inline-block">
-      <Avatar className={`${sizeClass} border-2 border-primary/30`}>
-        <AvatarImage src={avatarUrl || undefined} />
-        <AvatarFallback className="bg-primary/10 text-primary font-bold">
+      <Avatar className={`${sizeClass} border border-border/50 shadow-sm transition-all duration-300 hover:border-primary/30`}>
+        <AvatarImage src={avatarUrl || undefined} className="object-cover" />
+        <AvatarFallback className="bg-primary/5 text-primary font-bold text-xs uppercase">
           {initials}
         </AvatarFallback>
       </Avatar>
       <Button
         size="icon"
         variant="secondary"
-        className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full border border-border"
+        className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-background/90 hover:bg-primary hover:text-primary-foreground backdrop-blur-sm border border-border/60 shadow-sm transition-all duration-150 active:scale-95"
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
       >

@@ -64,32 +64,37 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
-      <SidebarHeader className="p-4">
+      <SidebarHeader className="p-4 border-b border-sidebar-border/20">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-md shadow-primary/10">
             <Zap className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed &&
           <div>
-              <h2 className="font-display text-sm font-bold tracking-wider neon-text">CipriFitness</h2>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{roleLabel}</p>
+              <h2 className="font-sans text-sm font-extrabold tracking-tight text-sidebar-primary-foreground uppercase">CipriFitness</h2>
+              <p className="text-[10px] text-sidebar-foreground/60 uppercase tracking-widest font-semibold">{roleLabel}</p>
             </div>
           }
         </div>
       </SidebarHeader>
-
+ 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground text-[10px] uppercase tracking-widest">
+          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-bold px-3">
             {!collapsed && "Navegación"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end className="hover:bg-secondary/80 transition-colors" activeClassName="bg-primary/10 text-primary neon-border">
-                      <item.icon className="mr-2 h-4 w-4" />
+                  <SidebarMenuButton asChild className="p-0 hover:bg-transparent">
+                    <NavLink 
+                      to={item.url} 
+                      end 
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150" 
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm border border-sidebar-border/30"
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>

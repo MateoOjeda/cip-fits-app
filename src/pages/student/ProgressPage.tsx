@@ -100,96 +100,84 @@ export default function ProgressPage() {
   });
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 sm:p-6 pb-32 animate-in fade-in duration-750">
-      {/* PROFILE HEADER SECTION */}
-      <div className="relative pt-12 mb-12">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200%] h-64 bg-gradient-to-b from-primary/10 to-transparent rounded-[100%] opacity-50 -z-10" />
-        
-        <div className="flex flex-col items-center text-center space-y-4">
-          <div className="relative">
-            <div className="h-32 w-32 rounded-full border-4 border-background shadow-2xl overflow-hidden bg-muted flex items-center justify-center">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.display_name || ""} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-4xl font-bold text-muted-foreground">{profile?.display_name?.slice(0, 2).toUpperCase() || "?"}</span>
-              )}
-            </div>
-            <div className="absolute bottom-1 right-1 h-8 w-8 bg-primary rounded-full border-4 border-background flex items-center justify-center shadow-lg">
-              <TrendingUp className="h-4 w-4 text-white" />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-3xl font-display font-black tracking-tight uppercase leading-none">{profile?.display_name || "Mi Progreso"}</h1>
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-primary font-black text-[10px] uppercase tracking-[0.2em] opacity-80 whitespace-nowrap">Seguimiento de Desempeño</p>
-              {hasPendingSurveys && (
-                <Badge 
-                  className="bg-amber-500/20 text-amber-500 border-amber-500/30 rounded-full text-[10px] font-black px-3 py-1 flex items-center gap-1.5 animate-bounce shadow-lg shadow-amber-500/10 cursor-pointer hover:bg-amber-500/30 transition-colors"
-                  onClick={() => navigate("/student/surveys")}
-                >
-                  <ClipboardList className="h-3 w-3" />
-                  ENCUESTAS PENDIENTES
-                </Badge>
-              )}
-            </div>
-          </div>
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Mi Progreso</h1>
+          <p className="text-sm text-muted-foreground mt-1">Monitorea tu desempeño semanal y efectividad de entrenamiento</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
+          <TrendingUp className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Desempeño</span>
         </div>
       </div>
 
-      <div className="space-y-12">
+      {hasPendingSurveys && (
+        <div className="flex justify-center">
+          <Badge 
+            className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-semibold px-3 py-1.5 flex items-center gap-1.5 cursor-pointer hover:bg-amber-500/15 transition-colors"
+            onClick={() => navigate("/student/surveys")}
+          >
+            <ClipboardList className="h-3.5 w-3.5" />
+            Tienes encuestas de seguimiento pendientes
+          </Badge>
+        </div>
+      )}
+
+      <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Ejercicios", value: totalExercises, sub: "Asignados", icon: Dumbbell, color: "text-blue-500" },
-          { label: "Check-ins", value: completedToday, sub: "Completados", icon: Zap, color: "text-amber-500" },
-          { label: "Peso", value: profile?.weight ? `${profile.weight} kg` : "—", sub: "Actual", icon: Weight, color: "text-emerald-500" },
-          { label: "Nivel", value: `${unlockedCount}/12`, sub: "Evolución", icon: TrendingUp, color: "text-primary" }
-        ].map((stat, i) => (
-          <Card key={i} className="card-premium border-border/40 bg-card group hover:bg-card/80 transition-all duration-300 overflow-hidden">
-            <CardContent className="p-5 flex flex-col items-center justify-center text-center relative">
-              <div className={cn("mb-3 p-3 rounded-2xl bg-primary/10 group-hover:scale-110 transition-transform duration-500", stat.color)}>
-                <stat.icon className="h-6 w-6" />
-              </div>
-              <p className="text-2xl font-black tracking-tighter uppercase text-foreground">{stat.value}</p>
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1 opacity-60">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          {[
+            { label: "Ejercicios", value: totalExercises, sub: "Asignados", icon: Dumbbell, color: "text-blue-500 bg-blue-500/10 border-blue-500/20" },
+            { label: "Check-ins", value: completedToday, sub: "Completados", icon: Zap, color: "text-amber-500 bg-amber-500/10 border-amber-500/20" },
+            { label: "Peso", value: profile?.weight ? `${profile.weight} kg` : "—", sub: "Actual", icon: Weight, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" },
+            { label: "Nivel", value: `${unlockedCount}/12`, sub: "Evolución", icon: TrendingUp, color: "text-primary bg-primary/10 border-primary/20" }
+          ].map((stat, i) => (
+            <Card key={i} className="border border-border/50 bg-card hover:bg-muted/10 transition-all rounded-xl shadow-sm">
+              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                <div className={cn("mb-2.5 p-2 rounded-lg border", stat.color)}>
+                  <stat.icon className="h-4.5 w-4.5" />
+                </div>
+                <p className="text-xl font-bold tracking-tight text-foreground">{stat.value}</p>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mt-0.5">{stat.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
         {/* Completion by day */}
-        <Card className="card-premium border-border/40 bg-card/40 shadow-xl rounded-[2.5rem] overflow-hidden">
-          <div className="p-6 border-b border-border/40 bg-muted/30">
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2">
+        <Card className="border border-border/50 bg-card shadow-sm rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-border/50 bg-muted/40">
+            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-foreground">
               <Target className="h-4 w-4 text-primary" />
               Consistencia Semanal
             </h3>
           </div>
-          <CardContent className="p-6 sm:p-8">
-            <div className="grid grid-cols-7 gap-3 sm:gap-6">
+          <CardContent className="p-5">
+            <div className="grid grid-cols-7 gap-2 sm:gap-4">
               {dayStats.map((ds) => {
                 const pct = ds.total > 0 ? Math.round((ds.done / ds.total) * 100) : 0;
                 return (
-                  <div key={ds.day} className="flex flex-col items-center gap-3 group">
-                    <div className="relative w-full h-32 bg-muted/40 rounded-2xl overflow-hidden shadow-inner border border-border/40">
+                  <div key={ds.day} className="flex flex-col items-center gap-2.5 group">
+                    <div className="relative w-full h-28 bg-muted/30 rounded-lg overflow-hidden border border-border/40 shadow-inner">
                       <div
-                        className="absolute bottom-0 w-full bg-primary/10 transition-all duration-1000 ease-out"
+                        className="absolute bottom-0 w-full bg-primary/20 transition-all duration-300"
                         style={{ height: `${pct}%` }}
                       />
                       <div
-                        className="absolute bottom-0 w-full bg-primary shadow-lg shadow-primary/40 transition-all duration-1000 ease-out"
+                        className="absolute bottom-0 w-full bg-primary shadow-sm transition-all duration-300"
                         style={{ height: `${ds.total > 0 ? (ds.done / ds.total) * 100 : 0}%` }}
                       />
                       {pct === 100 && (
-                        <div className="absolute top-2 left-1/2 -translate-x-1/2 animate-bounce">
-                          <Zap className="h-3 w-3 text-amber-400 fill-amber-400" />
+                        <div className="absolute top-1.5 left-1/2 -translate-x-1/2">
+                          <Zap className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
                         </div>
                       )}
                     </div>
                     <div className="flex flex-col items-center">
-                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{ds.day}</p>
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{ds.day}</p>
                       <p className={cn(
-                        "text-[10px] font-bold mt-0.5 font-display",
+                        "text-[10px] font-semibold mt-0.5",
                         ds.done === ds.total && ds.total > 0 ? "text-primary" : "text-muted-foreground/60"
                       )}>
                         {ds.done}/{ds.total}
@@ -204,17 +192,16 @@ export default function ProgressPage() {
 
         {/* Completion rate - Elite Card */}
         <div className="relative group">
-          <div className="absolute inset-0 bg-primary/20 blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-1000" />
-          <Card className="card-premium border-primary/20 bg-primary/5 py-12 relative overflow-hidden rounded-[3rem] shadow-2xl shadow-primary/10">
-            <CardContent className="p-0 text-center relative z-10 space-y-6">
-              <div className="h-20 w-20 bg-primary/10 rounded-[2.5rem] flex items-center justify-center mx-auto border border-primary/20 shadow-2xl shadow-primary/10 transition-transform duration-700 group-hover:rotate-[360deg]">
-                <Zap className="h-10 w-10 text-primary fill-primary" />
+          <Card className="border border-primary/20 bg-primary/5 py-8 relative overflow-hidden rounded-2xl shadow-sm text-center">
+            <CardContent className="p-0 space-y-4">
+              <div className="h-14 w-14 bg-primary/10 rounded-xl flex items-center justify-center mx-auto border border-primary/20 shadow-sm">
+                <Zap className="h-7 w-7 text-primary fill-primary" />
               </div>
               <div className="space-y-1">
-                <p className="text-6xl font-display font-black tracking-tighter text-foreground leading-none">{completionRate}%</p>
-                <p className="text-[10px] font-black text-primary uppercase tracking-[0.4em] font-display">Tasa de Efectividad</p>
+                <p className="text-4xl font-bold tracking-tight text-foreground leading-none">{completionRate}%</p>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Tasa de Efectividad</p>
               </div>
-              <p className="text-sm text-muted-foreground max-w-[240px] mx-auto font-medium leading-relaxed italic px-4">
+              <p className="text-xs text-muted-foreground max-w-[280px] mx-auto font-medium leading-relaxed italic px-4">
                 {completionRate >= 80 ? "¡Estás en la zona elite! Mantén ese ritmo imparable. 🏆" : "Cada repetición cuenta para tu objetivo. ¡Sigue presionando! 💪"}
               </p>
             </CardContent>

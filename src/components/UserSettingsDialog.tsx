@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -46,14 +46,16 @@ export default function UserSettingsDialog() {
     loadProfile();
   }, [user, open]);
 
-  const handleSaveBilling = async () => {
+  const handleSaveBilling = async (alias: string, whatsapp: string) => {
     if (!user) return;
     setSaving(true);
     try {
       await updateDoc(doc(db, "profiles", user.uid), { 
-        mercadopago_alias: mercadopagoAlias.trim(), 
-        whatsapp_number: whatsappNumber.trim() 
+        mercadopago_alias: alias.trim(), 
+        whatsapp_number: whatsapp.trim() 
       });
+      setMercadopagoAlias(alias);
+      setWhatsappNumber(whatsapp);
       toast.success("Configuración guardada");
     } catch (err) {
       console.error("Error saving billing:", err);
@@ -117,22 +119,12 @@ export default function UserSettingsDialog() {
             </TabsContent>
             
             <TabsContent value="billing" className="pt-4 space-y-4">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm">Alias de Mercado Pago</Label>
-                  <Input placeholder="ej: mi.alias.mp" value={mercadopagoAlias} onChange={(e) => setMercadopagoAlias(e.target.value)} maxLength={100} />
-                  <p className="text-[11px] text-muted-foreground">Tus alumnos podrán copiar este alias para realizarte pagos.</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Número de WhatsApp</Label>
-                  <Input placeholder="ej: 5491112345678" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} maxLength={20} />
-                  <p className="text-[11px] text-muted-foreground">Con código de país, sin + ni espacios. Se usará para el botón de comprobante.</p>
-                </div>
-                <Button onClick={handleSaveBilling} disabled={saving} className="w-full gap-2">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Guardar configuración
-                </Button>
-              </div>
+              <BillingSettingsForm 
+                initialAlias={mercadopagoAlias}
+                initialWhatsapp={whatsappNumber}
+                onSave={handleSaveBilling}
+                saving={saving}
+              />
             </TabsContent>
           </Tabs>
         ) : (
@@ -170,7 +162,65 @@ export default function UserSettingsDialog() {
   );
 }
 
-function AppearanceSettings({ currentTheme, setTheme, themes }: any) {
+interface BillingSettingsFormProps {
+  initialAlias: string;
+  initialWhatsapp: string;
+  onSave: (alias: string, whatsapp: string) => Promise<void>;
+  saving: boolean;
+}
+
+const BillingSettingsForm = memo(function BillingSettingsForm({
+  initialAlias,
+  initialWhatsapp,
+  onSave,
+  saving
+}: BillingSettingsFormProps) {
+  const [alias, setAlias] = useState(initialAlias);
+  const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
+
+  useEffect(() => {
+    setAlias(initialAlias);
+  }, [initialAlias]);
+
+  useEffect(() => {
+    setWhatsapp(initialWhatsapp);
+  }, [initialWhatsapp]);
+
+  const handleSubmit = () => {
+    onSave(alias, whatsapp);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-sm">Alias de Mercado Pago</Label>
+        <Input 
+          placeholder="ej: mi.alias.mp" 
+          value={alias} 
+          onChange={(e) => setAlias(e.target.value)} 
+          maxLength={100} 
+        />
+        <p className="text-[11px] text-muted-foreground">Tus alumnos podrán copiar este alias para realizarte pagos.</p>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-sm">Número de WhatsApp</Label>
+        <Input 
+          placeholder="ej: 5491112345678" 
+          value={whatsapp} 
+          onChange={(e) => setWhatsapp(e.target.value)} 
+          maxLength={20} 
+        />
+        <p className="text-[11px] text-muted-foreground">Con código de país, sin + ni espacios. Se usará para el botón de comprobante.</p>
+      </div>
+      <Button onClick={handleSubmit} disabled={saving} className="w-full gap-2">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        Guardar configuración
+      </Button>
+    </div>
+  );
+});
+
+const AppearanceSettings = memo(function AppearanceSettings({ currentTheme, setTheme, themes }: any) {
   const generalThemes = themes.filter((t: any) => t.category === 'general' || !t.category);
   const tematicThemes = themes.filter((t: any) => t.category === 'tematica');
 
@@ -193,8 +243,8 @@ function AppearanceSettings({ currentTheme, setTheme, themes }: any) {
               onClick={() => setTheme(t.id)}
               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
                 currentTheme === t.id 
-                  ? 'border-primary bg-primary/10 shadow-sm neon-border' 
-                  : 'border-border bg-card/50 hover:bg-secondary/50'
+                  ? 'border-primary bg-primary/5 shadow-none' 
+                  : 'border-border bg-card hover:bg-muted/10'
               }`}
             >
               <div 
@@ -216,8 +266,8 @@ function AppearanceSettings({ currentTheme, setTheme, themes }: any) {
               onClick={() => setTheme(t.id)}
               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
                 currentTheme === t.id 
-                  ? 'border-primary bg-primary/10 shadow-sm neon-border' 
-                  : 'border-border bg-card/50 hover:bg-secondary/50'
+                  ? 'border-primary bg-primary/5 shadow-none' 
+                  : 'border-border bg-card hover:bg-muted/10'
               }`}
             >
               <div 
@@ -231,4 +281,4 @@ function AppearanceSettings({ currentTheme, setTheme, themes }: any) {
       </div>
     </div>
   );
-}
+});

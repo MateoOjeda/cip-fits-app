@@ -14,144 +14,260 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/user_roles/$(userId)).data.role;
     }
 
-    // Profiles: Everyone can read, only owner can write (public profile view)
+    // Profiles: Read restricted to owners, linked trainers, and students viewing their trainer's profile.
+    // [CAMBIO TAREA-001] Se elimina la lectura pública total (read: if true) para evitar fuga de PII/Salud.
     match /profiles/{userId} {
-      allow read: if true;
+      allow read: if isAuthenticated() && (
+        isOwner(userId) ||
+        getRole(request.auth.uid) == "trainer" ||
+        getRole(userId) == "trainer"
+      );
       allow write: if isOwner(userId);
     }
 
-    // User Roles: Read by anyone authenticated, write restricted (only system/admin usually, but for now owner)
+    // User Roles: Read by anyone authenticated. 
+    // [CAMBIO TAREA-001] Se restringe el auto-registro para que usuarios nuevos solo puedan registrarse como "student" (evita auto-promoción a trainer).
+    // Se mantiene la compatibilidad con creación de alumnos sombra por parte de entrenadores.
     match /user_roles/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Simplified for now to allow Trainer registration
+      allow create: if isAuthenticated() && (
+        // Un entrenador puede crear un rol, pero únicamente de tipo "student" (por ejemplo, para alumnos sombra)
+        (getRole(request.auth.uid) == "trainer" && request.resource.data.role == "student") ||
+        // Un usuario nuevo que se registra a sí mismo solo puede asignarse el rol de "student"
+        (request.auth.uid == docId && request.resource.data.user_id == docId && request.resource.data.role == "student")
+      );
+      allow update, delete: if isAuthenticated() && (
+        (getRole(request.auth.uid) == "trainer")
+      );
     }
 
-    // Trainer-Student Links
+    // Trainer-Student Links: Read for trainer and linked student.
+    // Update (payment and plans status) restricted to the trainer.
     match /trainer_students/{linkId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id || 
         request.auth.uid == resource.data.student_id
       );
-      allow write: if isAuthenticated(); // Simplified to allow Trainers to link/unlink
-    }
-
-    // Exercises: Read allowed if user is authenticated (trainer/student owner) OR if querying student exercises publicly
-    match /exercises/{exerciseId} {
-      allow read: if (isAuthenticated() && (
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.trainer_id ||
+        request.auth.uid == request.resource.data.student_id
+      );
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id && 
+        getRole(request.auth.uid) == "trainer"
+      );
+      allow delete: if isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id || 
         request.auth.uid == resource.data.student_id
-      )) || resource.data.student_id != null;
-      allow write: if isAuthenticated() && (
-        request.auth.uid == request.resource.data.trainer_id ||
-        request.auth.uid == resource.data.trainer_id
       );
     }
 
-    // Routines
+    // Exercises: Only trainers can write/modify exercises for their students.
+    // [CAMBIO TAREA-001] Se elimina la lectura pública anónima (allow read: if student_id != null) para evitar fuga de planificaciones de entrenamientos.
+    // Solo el entrenador propietario y el estudiante asignado pueden leer.
+    match /exercises/{exerciseId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id || 
+        request.auth.uid == resource.data.student_id
+      );
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
+      );
+    }
+
+    // Routines: Only trainers can write/modify routines.
     match /routines/{routineId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id || 
         (resource.data.target_type == 'ALUMNO' && request.auth.uid == resource.data.target_id)
       );
       allow write: if isAuthenticated() && (
-        request.auth.uid == request.resource.data.trainer_id ||
-        request.auth.uid == resource.data.trainer_id
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
       );
     }
 
-    // Training Groups
+    // Training Groups: Trainers can manage. All authenticated can read.
     match /training_groups/{groupId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && (
-        request.auth.uid == request.resource.data.trainer_id ||
-        request.auth.uid == resource.data.trainer_id
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
       );
     }
 
+    // Group Members: All authenticated can read. Trainers can manage.
     match /training_group_members/{memberId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer"
+      );
     }
 
+    // Group Exercises: All authenticated can read. Trainers can manage.
     match /group_exercises/{exId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer"
+      );
     }
 
-    match /routines/{routineId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-
-    // Routine Day Config: Read is public, write is authenticated
+    // Routine Day Config: Read allowed for trainer/student. Write restricted to trainers.
     match /routine_day_config/{configId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id || 
+        request.auth.uid == resource.data.student_id
+      );
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
+      );
     }
 
-    // Global Plans
+    // Global Plans: Only owners can manage.
     match /global_plans/{planId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && (
-        request.auth.uid == resource.data.trainer_id ||
-        request.auth.uid == request.resource.data.trainer_id
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
       );
     }
 
-    // Plan Levels / Purchases
+    // Plan Levels / Purchases: Write restricted to trainers (unlocking plans).
     match /plan_levels/{levelId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id ||
         request.auth.uid == resource.data.student_id
       );
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
+      );
     }
 
-    // Surveys
+    // Surveys: Only trainers can write/create templates.
     match /custom_surveys/{surveyId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
+      );
     }
     
+    // Survey Questions: Only trainers can manage.
     match /survey_questions/{questionId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" && (
+          (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||
+          (resource != null && request.auth.uid == resource.data.trainer_id)
+        )
+      );
     }
     
+    // Personal Diagnostic: All authenticated can read.
     match /seguimiento_personal/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.student_id ||
+        getRole(request.auth.uid) == "trainer"
+      );
+      allow write: if isAuthenticated() && (
+        (request.resource != null && request.auth.uid == request.resource.data.student_id) ||
+        (resource != null && request.auth.uid == resource.data.student_id)
+      );
     }
     
+    // Survey Assignments: Trainers can assign/delete. Students can update status to completed.
     match /survey_assignments/{assignId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id ||
+        request.auth.uid == resource.data.student_id
+      );
+      allow create: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" &&
+        request.auth.uid == request.resource.data.trainer_id
+      );
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == resource.data.trainer_id && getRole(request.auth.uid) == "trainer") ||
+        (request.auth.uid == resource.data.student_id && request.resource.data.status == "completada")
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id && 
+        getRole(request.auth.uid) == "trainer"
+      );
     }
     
+    // Survey Answers: Linked trainer and student can read. Only student/trainer can write/create.
     match /survey_answers/{answerId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id ||
+        request.auth.uid == resource.data.student_id
+      );
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.student_id ||
+        request.auth.uid == request.resource.data.trainer_id
+      );
+      allow update, delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id && getRole(request.auth.uid) == "trainer"
+      );
     }
 
-    // Tracking Changes
+    // Tracking Changes (Notifications): Trainers can write. Students or trainers can delete (clear).
     match /trainer_changes/{docId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.trainer_id ||
         request.auth.uid == resource.data.student_id
       );
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        getRole(request.auth.uid) == "trainer" &&
+        request.auth.uid == request.resource.data.trainer_id
+      );
+      allow update: if false; // Changes are immutable
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.trainer_id ||
+        request.auth.uid == resource.data.student_id
+      );
     }
 
-    // Exercise Logs
+    // Exercise Logs: Read/Write for trainer and student.
     match /exercise_logs/{logId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.student_id ||
+        request.auth.uid == resource.data.trainer_id
+      );
+      allow write: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.student_id ||
+        request.auth.uid == request.resource.data.trainer_id ||
+        (resource != null && (request.auth.uid == resource.data.student_id || request.auth.uid == resource.data.trainer_id))
+      );
     }
 
-    // Student Meals
+    // Student Meals: Read/Write for trainer and student.
     match /student_meals/{mealId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.student_id ||
+        request.auth.uid == resource.data.trainer_id
+      );
+      allow write: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.student_id ||
+        request.auth.uid == request.resource.data.trainer_id ||
+        (resource != null && (request.auth.uid == resource.data.student_id || request.auth.uid == resource.data.trainer_id))
+      );
     }
 
     // Default: Deny all

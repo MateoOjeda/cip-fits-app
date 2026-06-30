@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Dumbbell, CheckCircle, Apple, Loader2, Sparkles, Pencil, Archive, Users, ClipboardList, ChevronRight, AlertCircle, Clock } from "lucide-react";
+import { ArrowLeft, Dumbbell, CheckCircle, Apple, Loader2, Sparkles, Pencil, Archive, Users, ClipboardList, ChevronRight, AlertCircle, Clock, Mail, Phone, Target, TrendingUp, Heart, Info, Calendar } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ import ExerciseHistoryTab from "@/components/trainer/ExerciseHistoryTab";
 import MealsTab from "@/components/trainer/MealsTab";
 import { setRoutineCycleDates } from "@/services/rutinas";
 import { toast } from "sonner";
+import { addDays, differenceInDays } from "date-fns";
 
 
 interface Exercise {
@@ -46,6 +47,295 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const DAY_SHORT = ["L", "M", "X", "J", "V", "S", "D"];
+
+// --- SUBCOMPONENTE: StudentHeader ---
+interface StudentHeaderProps {
+  profile: any;
+  paymentPaid: boolean;
+  onPaymentToggle: (checked: boolean) => void;
+  selectedEntrenamiento: string;
+  selectedAlimentacion: string;
+  editingPlans: boolean;
+  setEditingPlans: (v: boolean) => void;
+  navigate: any;
+}
+
+const LEVEL_LABELS_HEADER: Record<string, string> = {
+  principiante: "Inicial", intermedio: "Intermedio", avanzado: "Avanzado",
+};
+
+export function StudentHeader({
+  profile,
+  paymentPaid,
+  onPaymentToggle,
+  selectedEntrenamiento,
+  selectedAlimentacion,
+  editingPlans,
+  setEditingPlans,
+  navigate
+}: StudentHeaderProps) {
+  const joinDate = profile.created_at ? new Date(profile.created_at).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }) : "Reciente";
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border/40 bg-card/60 p-6 shadow-sm">
+      <div className="absolute top-0 right-0 h-40 w-40 bg-primary/5 rounded-full blur-3xl -z-10" />
+      
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg shrink-0" onClick={() => navigate("/trainer/students")}>
+            <ArrowLeft className="h-4.5 w-4.5" />
+          </Button>
+          
+          <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md shrink-0">
+            <AvatarImage src={profile.avatar_url || undefined} />
+            <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
+              {profile.avatar_initials || (profile.display_name || "??").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{profile.display_name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={cn(
+                "text-[9px] font-bold px-2 py-0.5 rounded-md border-none",
+                paymentPaid ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-destructive/10 text-destructive"
+              )}>
+                {paymentPaid ? "✓ Pago al día" : "✗ Pago Pendiente"}
+              </Badge>
+              
+              {selectedEntrenamiento !== "none" && (
+                <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border-none">
+                  Entrenamiento: {LEVEL_LABELS_HEADER[selectedEntrenamiento] || selectedEntrenamiento}
+                </Badge>
+              )}
+
+              {selectedAlimentacion !== "none" && (
+                <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-none">
+                  Nutrición: {LEVEL_LABELS_HEADER[selectedAlimentacion] || selectedAlimentacion}
+                </Badge>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
+              <Calendar className="h-3 w-3 inline text-primary" />
+              Alumno desde el {joinDate}
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Actions Panel */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-muted/40 px-3.5 py-1.5 rounded-xl border border-border/50 shadow-sm">
+            <Label htmlFor="payment-switch-header" className="text-xs font-bold text-muted-foreground mr-1">
+              Pago Registrado:
+            </Label>
+            <Switch 
+              id="payment-switch-header" 
+              checked={paymentPaid} 
+              onCheckedChange={onPaymentToggle}
+              className="data-[state=checked]:bg-emerald-500" 
+            />
+          </div>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className={cn(
+              "h-9 rounded-xl font-semibold text-xs border-border/60 hover:bg-muted/10 gap-1.5",
+              editingPlans && "bg-primary/10 border-primary/30 text-primary hover:bg-primary/15"
+            )}
+            onClick={() => setEditingPlans(!editingPlans)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Planificar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- SUBCOMPONENTE: StudentSidebar ---
+interface StudentSidebarProps {
+  profile: any;
+  groupName?: string | null;
+  selectedEntrenamiento: string;
+  selectedAlimentacion: string;
+}
+
+export function StudentSidebar({
+  profile,
+  groupName,
+  selectedEntrenamiento,
+  selectedAlimentacion
+}: StudentSidebarProps) {
+  return (
+    <Card className="border border-border/40 bg-card/40 rounded-2xl shadow-sm overflow-hidden h-fit">
+      <CardHeader className="p-4 border-b border-border/40 bg-muted/20">
+        <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha de Datos Fijos</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-4">
+        {/* Contact info */}
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Email</p>
+              <p className="text-xs font-semibold text-foreground truncate">{profile.email || "Sin registrar"}</p>
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-3">
+            <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Teléfono</p>
+              <p className="text-xs font-semibold text-foreground truncate">{profile.phone || "Sin registrar"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-[1px] bg-border/40 w-full" />
+
+        {/* Physical Profile */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Métricas Físicas</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-muted/30 border border-border/40 p-2 rounded-lg text-center">
+                <span className="text-[9px] text-muted-foreground block">Peso inicial</span>
+                <span className="text-xs font-bold text-foreground">{profile.weight ? `${profile.weight} kg` : "—"}</span>
+              </div>
+              <div className="bg-muted/30 border border-border/40 p-2 rounded-lg text-center">
+                <span className="text-[9px] text-muted-foreground block">Edad</span>
+                <span className="text-xs font-bold text-foreground">{profile.age ? `${profile.age} años` : "—"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-[1px] bg-border/40 w-full" />
+
+        {/* Trainer & Group */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Grupo asignado</p>
+              <p className="text-xs font-semibold text-foreground">{groupName || "Ninguno (Individual)"}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Target className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Objetivos</p>
+              <p className="text-xs font-semibold text-foreground">{profile.objective || "Acondicionamiento Físico"}</p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+// --- SUBCOMPONENTE: StudentSummary ---
+interface StudentSummaryProps {
+  exercises: any[];
+  profile: any;
+  daysRemaining: number;
+  hasPlan: boolean;
+  pendingSurveysCount: number;
+}
+
+export function StudentSummary({
+  exercises,
+  profile,
+  daysRemaining,
+  hasPlan,
+  pendingSurveysCount
+}: StudentSummaryProps) {
+  const totalEx = exercises.length;
+  const completedEx = exercises.filter(e => e.completed).length;
+  const adherence = totalEx > 0 ? Math.round((completedEx / totalEx) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-primary/20 transition-all transition-ds">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary shrink-0">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Adherencia Semanal</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{adherence}%</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-emerald-500/20 transition-all transition-ds">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <Dumbbell className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Ejercicios Realizados</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{completedEx} de {totalEx}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-amber-500/20 transition-all transition-ds">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Encuestas Pendientes</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{pendingSurveysCount} pendientes</h3>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Cycle Remaining Card */}
+      <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-[9px] font-bold">
+                <Clock className="h-3.5 w-3.5 text-primary" />
+                <span>Ciclo de Entrenamiento</span>
+              </div>
+              <h3 className="text-sm font-bold text-foreground mt-1">
+                {daysRemaining} Días restantes
+              </h3>
+              <p className="text-[10px] text-muted-foreground">
+                Próxima re-planificación sugerida
+              </p>
+            </div>
+            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary shadow-sm">
+              <Calendar className="h-5 w-5" />
+            </div>
+          </div>
+          
+          <div className="mt-4 w-full h-1.5 bg-muted rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-500" 
+              style={{ width: `${Math.max(0, Math.min(100, (daysRemaining / 30) * 100))}%` }} 
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function StudentDetailPage() {
   const { studentId } = useParams<{ studentId: string }>();
@@ -266,437 +556,472 @@ export default function StudentDetailPage() {
     return { exercisesByDay, groupExercisesByDay };
   }, [exercises, groupExercises]);
 
+
+
+
+  const nextPaymentDate = routineNextChange 
+    ? new Date(routineNextChange)
+    : addDays(new Date(profile?.created_at || new Date()), 30);
+  const daysRemaining = Math.max(0, differenceInDays(nextPaymentDate, new Date()));
+  const hasPlan = selectedEntrenamiento !== "none" || selectedAlimentacion !== "none";
+
+  // Initializing activeTab to 'summary' for the new SaaS CRM layout
+  useEffect(() => {
+    setActiveTab("summary");
+  }, []);
+
   return (
     <div className="max-w-7xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={() => navigate("/trainer/students")}><ArrowLeft className="h-4.5 w-4.5" /></Button>
-          <Avatar className="h-12 w-12 border border-border/50 shadow-sm">
-            <AvatarImage src={profile.avatar_url || undefined} />
-            <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
-              {profile.avatar_initials || (profile.display_name || "??").slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">{profile.display_name}</h1>
-            <Badge variant="outline" className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md ${paymentPaid ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"}`}>
-              {paymentPaid ? "✓ Pagado" : "✗ Pendiente"}
-            </Badge>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 bg-muted/40 px-3.5 py-2 rounded-xl border border-border/50">
-          <Label htmlFor="payment-switch-header" className="text-xs font-semibold text-muted-foreground mr-1">
-            Pago:
-          </Label>
-          <Switch 
-            id="payment-switch-header" 
-            checked={paymentPaid} 
-            onCheckedChange={handlePaymentToggle}
-            className="data-[state=checked]:bg-emerald-500" 
-          />
-        </div>
-      </div>
+      {/* StudentHeader */}
+      <StudentHeader 
+        profile={profile}
+        paymentPaid={paymentPaid}
+        onPaymentToggle={handlePaymentToggle}
+        selectedEntrenamiento={selectedEntrenamiento}
+        selectedAlimentacion={selectedAlimentacion}
+        editingPlans={editingPlans}
+        setEditingPlans={setEditingPlans}
+        navigate={navigate}
+      />
 
       {/* Plan Assignment with edit lock */}
-      <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Asignación de Planes</CardTitle>
-            <Button variant="ghost" size="icon" className={`h-8 w-8 ${editingPlans ? "text-primary" : "text-muted-foreground"}`} onClick={() => setEditingPlans(!editingPlans)}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {(
-            [
+      {editingPlans && (
+        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm animate-in fade-in duration-200">
+          <CardHeader className="pb-3 p-4 border-b border-border/40 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Configurar Niveles de Plan</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            {[
               { type: "entrenamiento", icon: Dumbbell, label: "Entrenamiento", selected: selectedEntrenamiento },
               { type: "nutricion", icon: Apple, label: "Alimentación", selected: selectedAlimentacion },
-            ]
-            .filter(({ selected }) => editingPlans || selected !== "none")
-            .map(({ type, icon: Icon, label, selected }) => (
-              <div key={type} className="flex items-center gap-4 p-3 rounded-lg bg-secondary/30">
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Icon className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Label className="text-sm font-semibold">{label}</Label>
-                  <p className="text-xs mt-0.5">
-                    {selected !== "none"
-                      ? <Badge variant="outline" className="text-[10px] bg-green-500/15 text-green-500 border-green-500/30">{LEVEL_LABELS[selected]} — Activo</Badge>
-                      : <span className="text-[10px] text-destructive">Sin plan asignado</span>}
-                  </p>
-                </div>
-                {editingPlans && (
-                  <Select value={selected} onValueChange={(val) => handlePlanChangeRequest(type, val)}>
-                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin plan</SelectItem>
-                      <SelectItem value="principiante">Inicial</SelectItem>
-                      <SelectItem value="intermedio">Intermedio</SelectItem>
-                      <SelectItem value="avanzado">Avanzado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-
-
-
-
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">
-              {exercises.length > 0 ? Math.round((exercises.filter((e) => e.completed).length / exercises.length) * 100) : 0}%
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Completitud</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{exercises.filter((e) => e.completed).length}/{exercises.length}</p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Ejercicios</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{profile.weight ? `${profile.weight}` : "—"}</p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Peso actual (kg)</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        {(() => {
-          const tabs = [
-            { value: "weight", icon: "📈", label: "Peso" },
-            { value: "meals", icon: "🍽️", label: "Comidas" },
-            { value: "routine", icon: "🏋️", label: "Rutina" },
-            ...(hasGroupRoutine ? [{ value: "group_routine", icon: "👥", label: "Grupo" }] : []),
-            { value: "surveys", icon: <ClipboardList className="h-4 w-4" />, label: "Seguimiento" },
-          ];
-          
-          return (
-            <TabsList 
-              className={`grid w-full bg-muted/60 border border-border/50 p-1 h-auto min-h-[52px] rounded-xl`}
-              style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
-            >
-              {tabs.map((tab) => (
-                <TabsTrigger 
-                  key={tab.value} 
-                  value={tab.value} 
-                  className="flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 transition-all shadow-none data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg min-w-0"
-                >
-                  <div className="text-base sm:text-lg h-5 flex items-center justify-center">{tab.icon}</div>
-                  <span className={`text-[9px] sm:text-[10px] truncate w-full text-center ${activeTab === tab.value ? "font-bold text-primary" : "text-muted-foreground"}`}>
-                    {tab.label}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          );
-        })()}
-
-        <TabsContent value="weight">
-          {studentId && (
-            <div className="space-y-4">
-              <WeightProgressChart studentId={studentId} />
-              <ExerciseHistoryTab studentId={studentId} />
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="meals">
-          {studentId && <MealsTab studentId={studentId} nutritionLevel={selectedAlimentacion} readOnly={true} />}
-        </TabsContent>
-
-        <TabsContent value="routine">
-          <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-            <CardHeader className="pb-3 border-b border-border/40 p-4">
-              <CardTitle className="text-base flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Dumbbell className="h-5 w-5 text-primary" />
-                  Rutina Asignada
-                </div>
-                {isLoadingRoutines && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-7 gap-1">
-                {DAYS.map((day, i) => {
-                  const count = exercisesByDay[day]?.length || 0;
-                  const isActive = selectedDayTab === day;
-                  return (
-                    <button 
-                      key={day} 
-                      onClick={() => setSelectedDayTab(day)}
-                      className={`flex flex-col items-center justify-center h-12 rounded-lg text-xs font-bold border transition-all ${
-                        isActive 
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm" 
-                          : count > 0 
-                            ? "bg-primary/10 border-primary/30 text-primary" 
-                            : "bg-secondary/30 border-border text-muted-foreground"
-                      }`}
-                    >
-                      <span className="text-[11px]">{DAY_SHORT[i]}</span>
-                      {count > 0 && <span className="text-[9px] mt-0.5">{count}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="pt-2">
-                <p className="text-xs font-semibold text-primary mb-3 uppercase tracking-wider">{selectedDayTab}</p>
-                {(!exercisesByDay[selectedDayTab] || exercisesByDay[selectedDayTab].length === 0) ? (
-                  <p className="text-sm text-muted-foreground text-center py-8 bg-secondary/10 rounded-lg border border-dashed border-border">
-                    Sin ejercicios para el {selectedDayTab}
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2">
-                    {exercisesByDay[selectedDayTab].map((ex) => (
-                      <div key={ex.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
-                        <CheckCircle className={`h-4 w-4 flex-shrink-0 ${ex.completed ? "text-primary" : "text-muted-foreground/30"}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{ex.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{ex.sets}×{ex.reps} · {ex.weight}kg</p>
-                        </div>
-                        {ex.completed && <Badge className="bg-primary/20 text-primary text-[10px] py-0 px-1 border-0">Hecho</Badge>}
-                      </div>
-                    ))}
+            ].map(({ type, icon: Icon, label, selected }) => (
+              <div key={type} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-secondary/20 border border-border/40">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Icon className="h-4 w-4 text-primary" />
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="group_routine">
-          {hasGroupRoutine && (
-            <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-              <CardHeader className="pb-3 border-b border-border/40 p-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="h-5 w-5 text-accent" />
-                  Rutina de Grupo
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-7 gap-1">
-                  {DAYS.map((day, i) => {
-                    const count = groupExercisesByDay[day]?.length || 0;
-                    const isActive = selectedDayTab === day;
-                    return (
-                      <button 
-                        key={day} 
-                        onClick={() => setSelectedDayTab(day)}
-                        className={`flex flex-col items-center justify-center h-12 rounded-lg text-xs font-bold border transition-all ${
-                          isActive 
-                            ? "bg-accent text-accent-foreground border-accent shadow-sm" 
-                            : count > 0 
-                              ? "bg-accent/10 border-accent/30 text-accent" 
-                              : "bg-secondary/30 border-border text-muted-foreground"
-                        }`}
-                      >
-                        <span className="text-[11px]">{DAY_SHORT[i]}</span>
-                        {count > 0 && <span className="text-[9px] mt-0.5">{count}</span>}
-                      </button>
-                    );
-                  })}
+                  <div>
+                    <Label className="text-xs font-bold block">{label}</Label>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                      {selected !== "none" ? `Activo: ${LEVEL_LABELS[selected]}` : "Sin asignar"}
+                    </span>
+                  </div>
                 </div>
+                <Select value={selected} onValueChange={(val) => handlePlanChangeRequest(type, val)}>
+                  <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin plan</SelectItem>
+                    <SelectItem value="principiante">Inicial</SelectItem>
+                    <SelectItem value="intermedio">Intermedio</SelectItem>
+                    <SelectItem value="avanzado">Avanzado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
-                <div className="pt-2">
-                  <p className="text-xs font-semibold text-accent mb-3 uppercase tracking-wider">{selectedDayTab}</p>
-                  {(!groupExercisesByDay[selectedDayTab] || groupExercisesByDay[selectedDayTab].length === 0) ? (
-                    <p className="text-sm text-muted-foreground text-center py-8 bg-secondary/10 rounded-lg border border-dashed border-border">
-                      Sin ejercicios grupales para el {selectedDayTab}
-                    </p>
+      {/* CRM Main Columns Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+        
+        {/* Left Column: Fixed Sidebar metadata */}
+        <StudentSidebar 
+          profile={profile}
+          groupName={groupMembershipQuery.data?.group_id ? "Rutina Grupal" : null}
+          selectedEntrenamiento={selectedEntrenamiento}
+          selectedAlimentacion={selectedAlimentacion}
+        />
+
+        {/* Right Column: Dynamic Tabs and Information panels */}
+        <div className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            {(() => {
+              const tabs = [
+                { value: "summary", label: "Resumen" },
+                { value: "routine", label: "Rutinas" },
+                { value: "meals", label: "Comidas" },
+                { value: "surveys", label: "Encuestas" },
+                { value: "progress", label: "Progreso" },
+                { value: "measurements", label: "Mediciones" },
+                { value: "transformations", label: "Transformación" },
+                { value: "diagnostic", label: "Diagnóstico" },
+                { value: "history", label: "Historial" }
+              ];
+              
+              return (
+                <TabsList className="flex flex-wrap w-full bg-muted/40 border border-border/50 p-1 h-auto rounded-xl">
+                  {tabs.map((tab) => (
+                    <TabsTrigger 
+                      key={tab.value} 
+                      value={tab.value} 
+                      className="flex-1 min-w-[70px] text-[10px] py-1.5 px-2 transition-all data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg font-semibold"
+                    >
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              );
+            })()}
+
+            {/* TAB: Resumen */}
+            <TabsContent value="summary" className="space-y-4 outline-none">
+              <StudentSummary 
+                exercises={exercises}
+                profile={profile}
+                daysRemaining={daysRemaining}
+                hasPlan={hasPlan}
+                pendingSurveysCount={pendingSurveys.length}
+              />
+            </TabsContent>
+
+            {/* TAB: Rutinas */}
+            <TabsContent value="routine" className="outline-none">
+              <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm">
+                <CardHeader className="pb-3 border-b border-border/40 p-4 bg-muted/20">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Dumbbell className="h-4.5 w-4.5 text-primary" />
+                      Ejercicios de la Rutina Asignada
+                    </div>
+                    {isLoadingRoutines && <Loader2 className="h-4.5 w-4.5 animate-spin text-muted-foreground" />}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  <div className="grid grid-cols-7 gap-1">
+                    {DAYS.map((day, i) => {
+                      const count = exercisesByDay[day]?.length || 0;
+                      const isActive = selectedDayTab === day;
+                      return (
+                        <button 
+                          key={day} 
+                          onClick={() => setSelectedDayTab(day)}
+                          className={cn(
+                            "flex flex-col items-center justify-center h-11 rounded-lg text-[10px] font-bold border transition-all transition-ds",
+                            isActive 
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm" 
+                              : count > 0 
+                                ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20" 
+                                : "bg-secondary/30 border-border text-muted-foreground hover:bg-secondary/40"
+                          )}
+                        >
+                          <span>{DAY_SHORT[i]}</span>
+                          {count > 0 && <span className="text-[8px] font-bold mt-0.5">{count}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1">
+                    <p className="text-xs font-bold text-primary mb-3 uppercase tracking-wider">{selectedDayTab}</p>
+                    {(!exercisesByDay[selectedDayTab] || exercisesByDay[selectedDayTab].length === 0) ? (
+                      <div className="text-center py-10 border border-dashed rounded-lg bg-muted/10">
+                        <Dumbbell className="h-6 w-6 mx-auto text-muted-foreground/35 mb-2" />
+                        <p className="text-xs text-muted-foreground font-medium">Sin ejercicios programados para el {selectedDayTab}</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2">
+                        {exercisesByDay[selectedDayTab].map((ex) => (
+                          <div key={ex.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/20 border border-border/40">
+                            <CheckCircle className={cn(
+                              "h-4 w-4 flex-shrink-0 transition-colors",
+                              ex.completed ? "text-emerald-500" : "text-muted-foreground/30"
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold truncate text-foreground">{ex.name}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{ex.sets} series × {ex.reps} repeticiones · {ex.weight} kg</p>
+                            </div>
+                            {ex.completed && (
+                              <Badge className="bg-emerald-500/15 border-none text-emerald-600 dark:text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                                Realizado
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* TAB: Comidas */}
+            <TabsContent value="meals" className="outline-none">
+              {studentId && <MealsTab studentId={studentId} nutritionLevel={selectedAlimentacion} readOnly={true} />}
+            </TabsContent>
+
+            {/* TAB: Encuestas */}
+            <TabsContent value="surveys" className="outline-none">
+              {isLoadingSurveysPending || isLoadingSurveysResults ? (
+                <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : viewingSurvey && viewingSurvey.type !== 'diagnostic' ? (
+                <div className="space-y-4">
+                  <Button variant="ghost" size="sm" className="gap-2 text-xs font-bold text-muted-foreground" onClick={() => setViewingSurvey(null)}>
+                    <ArrowLeft className="h-4 w-4" /> Volver a la lista
+                  </Button>
+                  
+                  <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm">
+                    <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{viewingSurvey.data.survey?.title || "Encuesta"}</CardTitle>
+                        <Badge variant="outline" className="text-[8px] font-bold uppercase bg-primary/10 border-primary/20 text-primary">
+                          {viewingSurvey.data.completed_at ? new Date(viewingSurvey.data.completed_at).toLocaleDateString() : "En progreso"}
+                        </Badge>
+                      </div>
+                      {viewingSurvey.data.survey?.description && (
+                        <p className="text-xs text-muted-foreground mt-1">{viewingSurvey.data.survey.description}</p>
+                      )}
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-3">
+                      {viewingSurvey.data.survey?.questions?.length > 0 ? (
+                        viewingSurvey.data.survey.questions.map((q: any, i: number) => {
+                          const answer = viewingSurvey.data.answers?.find((a: any) => a.question_id === q.id);
+                          return (
+                            <div key={q.id} className="p-3 rounded-lg bg-secondary/10 border border-border/40 space-y-1.5">
+                              <p className="text-xs font-bold text-foreground">
+                                <span className="text-primary font-bold mr-1.5">{i + 1}.</span>
+                                {q.question_text}
+                              </p>
+                              <p className="text-xs text-muted-foreground pl-4">
+                                {answer?.answer_text || <span className="text-muted-foreground/60 italic">Sin respuesta del alumno</span>}
+                              </p>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic text-center py-4">No hay respuestas cargadas para esta encuesta.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Encuestas Personalizadas</span>
+                    <div className="h-[1px] w-full bg-border/50" />
+                  </div>
+                  
+                  {[...pendingSurveys, ...surveyResults].length === 0 ? (
+                    <div className="py-10 text-center border rounded-xl border-dashed bg-card/30">
+                      <ClipboardList className="h-6 w-6 mx-auto text-muted-foreground/35 mb-2" />
+                      <p className="text-xs text-muted-foreground italic">No hay encuestas asignadas actualmente.</p>
+                    </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-2">
-                      {groupExercisesByDay[selectedDayTab].map((ex) => (
-                        <div key={ex.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30 border border-border/50">
-                          <div className="h-4 w-4 flex-shrink-0 bg-accent/20 rounded-full flex items-center justify-center">
-                            <Dumbbell className="h-2.5 w-2.5 text-accent" />
+                    <div className="space-y-2">
+                      {/* Pending Custom Surveys */}
+                      {pendingSurveys.map((item: any) => (
+                        <button 
+                          key={item.id}
+                          type="button"
+                          className="w-full flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/40 hover:border-primary/20 transition-all transition-ds text-left"
+                          onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                              <ClipboardList className="h-4.5 w-4.5 text-amber-500" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold block text-foreground leading-tight">{item.survey?.title || "Encuesta Personalizada"}</span>
+                              <span className="text-[9px] text-muted-foreground mt-0.5 block">Asignada, esperando respuesta</span>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{ex.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{ex.sets}×{ex.reps} {ex.weight ? `· ${ex.weight}kg` : ""}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                              Pendiente
+                            </Badge>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
-                          <Badge variant="outline" className="text-[10px] flex-shrink-0 border-accent/40 text-accent">
-                            Grupal
-                          </Badge>
-                        </div>
+                        </button>
+                      ))}
+
+                      {/* Completed Custom Surveys */}
+                      {surveyResults.map((item: any) => (
+                        <button 
+                          key={item.id}
+                          type="button"
+                          className="w-full flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/40 hover:border-primary/20 transition-all transition-ds text-left"
+                          onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
+                              <ClipboardList className="h-4.5 w-4.5 text-green-500" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold block text-foreground leading-tight">{item.survey?.title || "Encuesta Personalizada"}</span>
+                              <span className="text-[9px] text-muted-foreground mt-0.5 block">
+                                Completada el {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : "Recientemente"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-none text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                              Completada
+                            </Badge>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </button>
                       ))}
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+              )}
+            </TabsContent>
 
+            {/* TAB: Progreso */}
+            <TabsContent value="progress" className="space-y-4 outline-none">
+              {studentId && (
+                <div className="space-y-4">
+                  <WeightProgressChart studentId={studentId} />
+                  <ExerciseHistoryTab studentId={studentId} />
+                </div>
+              )}
+            </TabsContent>
 
-        <TabsContent value="surveys">
-          {isLoadingSurveysPending || isLoadingSurveysResults ? (
-            <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : viewingSurvey ? (
-            <div className="space-y-4">
-              <Button variant="ghost" size="sm" className="gap-2 -ml-2 mb-2" onClick={() => setViewingSurvey(null)}>
-                <ArrowLeft className="h-4 w-4" /> Volver a la lista
-              </Button>
-              
-              {viewingSurvey.type === 'diagnostic' ? (
-                <PersonalDiagnosticTab studentId={studentId} />
-              ) : (
-                <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{viewingSurvey.data.survey?.title || "Encuesta"}</CardTitle>
-                      <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
-                        {viewingSurvey.data.completed_at ? new Date(viewingSurvey.data.completed_at).toLocaleDateString() : "En progreso"}
-                      </Badge>
+            {/* TAB: Mediciones */}
+            <TabsContent value="measurements" className="outline-none">
+              <Card className="border border-border/40 bg-card/60 rounded-xl p-6 text-center">
+                <TrendingUp className="h-8 w-8 mx-auto text-primary mb-3 opacity-70" />
+                <h3 className="text-sm font-bold text-foreground">Registro de Mediciones Corporales</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  El alumno puede registrar sus mediciones periódicamente para graficar pliegues, perímetros musculares y porcentaje de grasa.
+                </p>
+                <div className="mt-4 flex justify-center gap-4">
+                  <div className="text-center p-3 bg-secondary/20 border rounded-xl min-w-[100px]">
+                    <span className="text-[9px] text-muted-foreground block">Peso Promedio</span>
+                    <span className="text-xs font-bold text-foreground">{profile.weight ? `${profile.weight} kg` : "—"}</span>
+                  </div>
+                  <div className="text-center p-3 bg-secondary/20 border rounded-xl min-w-[100px]">
+                    <span className="text-[9px] text-muted-foreground block">Altura</span>
+                    <span className="text-xs font-bold text-foreground">{profile.height ? `${profile.height} cm` : "—"}</span>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* TAB: Transformación */}
+            <TabsContent value="transformations" className="outline-none">
+              <Card className="border border-border/40 bg-card/60 rounded-xl p-6 text-center">
+                <Heart className="h-8 w-8 mx-auto text-pink-500 mb-3 opacity-70 animate-pulse" />
+                <h3 className="text-sm font-bold text-foreground">Evolución Física y Galería</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  Visualiza el cambio del alumno a través del tiempo mediante el registro de fotografías de frente, perfil y espalda.
+                </p>
+                <div className="mt-5 grid grid-cols-3 gap-2 max-w-md mx-auto">
+                  {["Frente", "Perfil", "Espalda"].map((type) => (
+                    <div key={type} className="aspect-[3/4] rounded-lg border border-dashed border-border/80 bg-muted/20 flex flex-col items-center justify-center p-2 text-center">
+                      <span className="text-[9px] font-bold text-muted-foreground">{type}</span>
+                      <span className="text-[8px] text-muted-foreground/60 mt-1 block">Sin imagen</span>
                     </div>
-                    {viewingSurvey.data.survey?.description && (
-                      <p className="text-xs text-muted-foreground">{viewingSurvey.data.survey.description}</p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {viewingSurvey.data.survey?.questions?.length > 0 ? (
-                      viewingSurvey.data.survey.questions.map((q: any, i: number) => {
-                        const answer = viewingSurvey.data.answers?.find((a: any) => a.question_id === q.id);
-                        return (
-                          <div key={q.id} className="p-3 rounded-lg bg-secondary/20 border border-border/50 space-y-1.5">
-                            <p className="text-sm font-medium">
-                              <span className="text-primary font-bold mr-1.5">{i + 1}.</span>
-                              {q.question_text}
-                            </p>
-                            <p className="text-sm text-foreground/80 pl-4">
-                              {answer?.answer_text || <span className="text-muted-foreground italic">Sin respuesta</span>}
-                            </p>
+                  ))}
+                </div>
+              </Card>
+            </TabsContent>
+
+            {/* TAB: Diagnóstico */}
+            <TabsContent value="diagnostic" className="outline-none">
+              {studentId && <PersonalDiagnosticTab studentId={studentId} />}
+            </TabsContent>
+
+            {/* TAB: Historial */}
+            <TabsContent value="history" className="space-y-4 outline-none">
+              <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm">
+                <CardHeader className="pb-3 border-b border-border/40 p-4 bg-muted/20">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Historial de Rutinas Archivadas</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  {/* Cycle dates modification form */}
+                  <div className="bg-secondary/20 p-3 rounded-lg border border-border/40 space-y-3">
+                    <Label className="text-xs font-bold text-foreground block">Ajuste de Ciclo Activo</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="start-date-input" className="text-[9px] text-muted-foreground uppercase font-bold mb-1 block">Fecha de inicio</Label>
+                        <Input 
+                          id="start-date-input"
+                          type="date" 
+                          className="h-8 text-xs" 
+                          value={routineAssignmentDate ? new Date(routineAssignmentDate).toISOString().split('T')[0] : ""} 
+                          onChange={(e) => handleUpdateCycleDates(e.target.value || null, routineNextChange)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="end-date-input" className="text-[9px] text-muted-foreground uppercase font-bold mb-1 block">Fecha de vencimiento</Label>
+                        <Input 
+                          id="end-date-input"
+                          type="date" 
+                          className="h-8 text-xs" 
+                          value={routineNextChange ? new Date(routineNextChange).toISOString().split('T')[0] : ""} 
+                          onChange={(e) => handleUpdateCycleDates(routineAssignmentDate, e.target.value || null)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-[1px] bg-border/40 w-full" />
+
+                  {archivedRoutines.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Archive className="h-6 w-6 mx-auto text-muted-foreground/35 mb-2" />
+                      <p className="text-xs text-muted-foreground font-medium">Sin rutinas archivadas en el historial</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {archivedRoutines.map((r: any) => (
+                        <div key={r.id} className="border border-border/40 rounded-xl p-3 bg-card/40 hover:border-primary/20 transition-all transition-ds">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">
+                                Rutina de {LEVEL_LABELS[r.level] || r.level}
+                              </p>
+                              <p className="text-[9px] text-muted-foreground mt-0.5">
+                                Asignada el {new Date(r.assigned_at).toLocaleDateString()} · {r.completed_count || 0} entrenamientos
+                              </p>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 text-[9px] font-bold text-primary hover:bg-primary/10 rounded-lg px-2"
+                              onClick={() => handleExpandRoutine(r.id)}
+                            >
+                              {expandedRoutine === r.id ? "Ocultar" : "Ver Ejercicios"}
+                            </Button>
                           </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic text-center py-4">No hay respuestas detalladas para esta encuesta o se encuentra pendiente.</p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold mb-1 px-1">Seguimiento y Encuestas</h3>
-              
-              {/* Diagnóstico Inicial */}
-              <button 
-                type="button"
-                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
-                onClick={() => setViewingSurvey({ type: 'diagnostic' })}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <span className="text-sm font-semibold">Diagnóstico de Cambio Personal</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {diagnosticStatus.completed && diagnosticStatus.date ? `Completada el ${new Date(diagnosticStatus.date).toLocaleDateString()}` : "Evaluación inicial de hábitos"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={diagnosticStatus.completed ? "outline" : "secondary"} className={diagnosticStatus.completed ? "bg-green-500/10 text-green-500 border-green-500/20 text-[10px]" : "bg-orange-500/10 text-orange-500 border-orange-500/20 text-[10px]"}>
-                    {diagnosticStatus.completed ? "Completada" : "Pendiente"}
-                  </Badge>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </button>
 
-              {/* Encuestas Personalizadas */}
-              {[...pendingSurveys, ...surveyResults].length === 0 ? (
-                <div className="py-8 text-center border rounded-xl border-dashed">
-                  <ClipboardList className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                  <p className="text-sm text-muted-foreground italic">No hay encuestas personalizadas asignadas.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Pending Surveys */}
-                  {pendingSurveys.map((item: any) => (
-                    <button 
-                      key={item.id}
-                      type="button"
-                      className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
-                      onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                          <ClipboardList className="h-5 w-5 text-orange-500" />
+                          {expandedRoutine === r.id && (
+                            <div className="mt-3 pt-3 border-t border-border/40 space-y-1.5 animate-in fade-in duration-200">
+                              {routineExercises.length === 0 ? (
+                                <p className="text-[10px] text-muted-foreground italic text-center py-2">Cargando ejercicios...</p>
+                              ) : (
+                                routineExercises.map((ex: any) => (
+                                  <div key={ex.id} className="flex justify-between items-center text-[10px] p-2 bg-secondary/10 rounded-md">
+                                    <span className="font-medium text-foreground/80">{ex.name}</span>
+                                    <span className="text-muted-foreground font-semibold">{ex.sets}×{ex.reps} · {ex.weight}kg</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex flex-col text-left">
-                          <span className="text-sm font-semibold">{item.survey?.title || "Encuesta Personalizada"}</span>
-                          <span className="text-[10px] text-muted-foreground">Asignada recientemente</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant="secondary" className="bg-orange-500/10 text-orange-500 border-orange-500/20 text-[10px]">
-                          Pendiente
-                        </Badge>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </button>
-                  ))}
-
-                  {/* Completed Surveys */}
-                  {surveyResults.map((item: any) => (
-                    <button 
-                      key={item.id}
-                      type="button"
-                      className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/40 transition-colors text-left"
-                      onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                          <ClipboardList className="h-5 w-5 text-green-500" />
-                        </div>
-                        <div className="flex flex-col text-left">
-                          <span className="text-sm font-semibold">{item.survey?.title || "Encuesta Personalizada"}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            Completada el {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : "Recientemente"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 text-[10px]">
-                          Completada
-                        </Badge>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
 
       {/* Confirmation Dialog */}
       <AlertDialog open={!!confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Cambiar plan?</AlertDialogTitle>
+            <AlertDialogTitle>¿Confirmar cambio de plan?</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDialog?.level === "none"
-                ? "Se desactivará el plan actual para este alumno."
-                : `Se cambiará el nivel a "${LEVEL_LABELS[confirmDialog?.level || ""] || confirmDialog?.level}". Los cambios se aplican inmediatamente.`}
+                ? "Se desactivará el plan actual para este alumno de forma inmediata."
+                : `Se actualizará el nivel a "${LEVEL_LABELS[confirmDialog?.level || ""] || confirmDialog?.level}". Los cambios se aplican de inmediato en la cuenta del alumno.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

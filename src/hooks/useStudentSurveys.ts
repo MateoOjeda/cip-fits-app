@@ -22,11 +22,18 @@ export function useStudentSurveys(studentId?: string) {
   });
 
   const submitAnswersMutation = useMutation({
-    mutationFn: ({ assignmentId, answers }: { assignmentId: string; answers: { question_id: string; answer_text: string }[] }) =>
+    mutationFn: ({ assignmentId, surveyId, answers }: { assignmentId: string; surveyId?: string; answers: { question_id: string; answer_text: string }[] }) =>
       submitSurveyAnswers(assignmentId, answers),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["studentPendingSurveys", studentId] });
       queryClient.invalidateQueries({ queryKey: ["studentSurveyResults", studentId] });
+      if (variables.surveyId) {
+        queryClient.invalidateQueries({ queryKey: ["surveyAssignments", variables.surveyId] });
+        queryClient.invalidateQueries({ queryKey: ["surveyAnswers", variables.surveyId] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["surveyAssignments"] });
+        queryClient.invalidateQueries({ queryKey: ["surveyAnswers"] });
+      }
     },
   });
 

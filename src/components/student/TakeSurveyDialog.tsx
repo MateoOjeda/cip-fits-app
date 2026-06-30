@@ -5,7 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Send } from "lucide-react";
-import { fetchSurveyWithQuestions, submitSurveyAnswers, type CustomSurvey } from "@/services/surveys";
+import { useAuth } from "@/hooks/useAuth";
+import { useStudentSurveys, useSurveyQuestions } from "@/hooks/useStudentSurveys";
 import { toast } from "sonner";
 
 interface TakeSurveyDialogProps {
@@ -17,20 +18,24 @@ interface TakeSurveyDialogProps {
 }
 
 export function TakeSurveyDialog({ assignmentId, surveyId, open, onOpenChange, onCompleted }: TakeSurveyDialogProps) {
-  const [survey, setSurvey] = useState<CustomSurvey | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuth();
+  
+  // Use React Query hooks instead of direct service calls
+  const { survey, isLoading } = useSurveyQuestions(open ? surveyId : undefined);
+  const { submitAnswers, isSubmittingAnswers: submitting } = useStudentSurveys(user?.uid);
+  
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
+  // Reset answers only when dialog closes or surveyId changes
   useEffect(() => {
-    if (open && surveyId) {
-      setLoading(true);
-      fetchSurveyWithQuestions(surveyId)
-        .then(s => setSurvey(s))
-        .catch(() => toast.error("Error al cargar la encuesta"))
-        .finally(() => setLoading(false));
+    if (!open) {
+      setAnswers({});
     }
-  }, [open, surveyId]);
+  }, [open]);
+
+  useEffect(() => {
+    setAnswers({});
+  }, [surveyId]);
 
   const handleSubmit = async () => {
     if (!survey?.questions) return;
@@ -41,31 +46,29 @@ export function TakeSurveyDialog({ assignmentId, surveyId, open, onOpenChange, o
       return toast.error("Por favor, responde todas las preguntas");
     }
 
-    setSubmitting(true);
     try {
       const formattedAnswers = Object.entries(answers).map(([qId, text]) => ({
         question_id: qId,
         answer_text: text
       }));
-      await submitSurveyAnswers(assignmentId, formattedAnswers);
+      await submitAnswers({ assignmentId, surveyId, answers: formattedAnswers });
       toast.success("Respuestas enviadas correctamente");
       onCompleted();
       onOpenChange(false);
     } catch {
       toast.error("Error al enviar las respuestas");
     }
-    setSubmitting(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{loading ? "Cargando..." : survey?.title}</DialogTitle>
+          <DialogTitle>{isLoading ? "Cargando..." : survey?.title}</DialogTitle>
           {survey?.description && <p className="text-sm text-muted-foreground mt-2">{survey.description}</p>}
         </DialogHeader>
         
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : survey?.questions ? (
           <div className="space-y-6 py-4">
@@ -108,7 +111,7 @@ export function TakeSurveyDialog({ assignmentId, surveyId, open, onOpenChange, o
         
         <DialogFooter className="mt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={loading || submitting || !survey} className="gap-2">
+          <Button onClick={handleSubmit} disabled={isLoading || submitting || !survey} className="gap-2">
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Enviar Respuestas
           </Button>

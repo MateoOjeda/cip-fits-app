@@ -13,7 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, Zap, Weight, TrendingUp, Dumbbell, Loader2, ClipboardList } from "lucide-react";
-import { fetchStudentPendingSurveys } from "@/services/surveys";
+import { useStudentSurveys } from "@/hooks/useStudentSurveys";
 import { useNavigate } from "react-router-dom";
 
 interface Exercise {
@@ -32,11 +32,14 @@ interface Profile {
 
 export default function ProgressPage() {
   const { user } = useAuth();
+  
+  // Use React Query hook instead of direct service call
+  const { pendingSurveys, isLoadingPending } = useStudentSurveys(user?.uid);
+
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [unlockedCount, setUnlockedCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [hasPendingSurveys, setHasPendingSurveys] = useState(false);
   const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
@@ -60,15 +63,11 @@ export default function ProgressPage() {
       );
       const snapLevels = await getDocs(qLevels);
 
-      // Fetch Surveys
-      const surveysData = await fetchStudentPendingSurveys(user.uid);
-
       setExercises(exData);
       if (profSnap.exists()) {
         setProfile(profSnap.data() as Profile);
       }
       setUnlockedCount(snapLevels.size);
-      setHasPendingSurveys(surveysData && surveysData.length > 0);
     } catch (err) {
       console.error("Error fetching progress data:", err);
     } finally {
@@ -80,7 +79,10 @@ export default function ProgressPage() {
     fetchData();
   }, [fetchData]);
 
-  if (loading) {
+  const hasPendingSurveys = pendingSurveys.length > 0;
+  const isLoadingAll = loading || isLoadingPending;
+
+  if (isLoadingAll) {
     return (
       <div className="flex justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrainerSurveys, useSurveyDetails } from "@/hooks/useTrainerSurveys";
 import { useLinkedStudents } from "@/hooks/useLinkedStudents";
-import { type CustomSurvey } from "@/services/surveys";
+import { type CustomSurvey, removeSurveyAssignment } from "@/services/surveys";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,8 @@ export default function TrainerSurveysPage() {
   const [assigning, setAssigning] = useState(false);
   const [assigningStudentId, setAssigningStudentId] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+
   // --- Results State ---
   const [selectedResultStudent, setSelectedResultStudent] = useState<string | null>(null);
 
@@ -57,18 +60,32 @@ export default function TrainerSurveysPage() {
     isLoadingAnswers 
   } = useSurveyDetails(activeSurveyId);
 
+  // Computed variables to prevent showing stale cache data (Race Condition fix)
+  const currentAssignments = useMemo(() => {
+    if (!assignments || assignments.length === 0) return [];
+    if (assignments[0].survey_id !== activeSurveyId) return [];
+    return assignments;
+  }, [assignments, activeSurveyId]);
+
+  const currentAnswers = useMemo(() => {
+    if (!answers || answers.length === 0) return [];
+    const hasCorrectSurveyId = assignments.length > 0 && assignments[0].survey_id === activeSurveyId;
+    if (!hasCorrectSurveyId) return [];
+    return answers;
+  }, [answers, assignments, activeSurveyId]);
+
   const assignedStudentIds = useMemo(() => {
-    return assignments.map((a: any) => a.student_id);
-  }, [assignments]);
+    return currentAssignments.map((a: any) => a.student_id);
+  }, [currentAssignments]);
 
   const loadingResults = isLoadingAssignments || isLoadingAnswers;
 
   // Set default selected student when results open
   useEffect(() => {
-    if (resultsSurvey && assignments.length > 0 && !selectedResultStudent) {
-      setSelectedResultStudent(assignments[0].student_id);
+    if (resultsSurvey && currentAssignments.length > 0 && !selectedResultStudent) {
+      setSelectedResultStudent(currentAssignments[0].student_id);
     }
-  }, [resultsSurvey, assignments, selectedResultStudent]);
+  }, [resultsSurvey, currentAssignments, selectedResultStudent]);
 
   const handleAddQuestion = () => {
     setQuestions([...questions, { question_text: "", question_type: "text", options: [] }]);
@@ -166,9 +183,15 @@ export default function TrainerSurveysPage() {
         await assignSurveyMutation({ surveyId: assignSurvey.id, studentIds });
         toast.success("Asignado a todos los alumnos");
       } else {
-        for (const student of students) {
-          await removeAssignmentMutation({ surveyId: assignSurvey.id, studentId: student.user_id });
-        }
+        // Remove assignments in parallel directly through the service
+        await Promise.all(
+          students.map(student => removeSurveyAssignment(assignSurvey.id, student.user_id))
+        );
+        // Invalidate React Query cache once
+        queryClient.invalidateQueries({ queryKey: ["surveyAssignments", assignSurvey.id] });
+        students.forEach(student => {
+          queryClient.invalidateQueries({ queryKey: ["studentPendingSurveys", student.user_id] });
+        });
         toast.info("Asignaciones removidas para todos");
       }
     } catch {
@@ -395,9 +418,9 @@ export default function TrainerSurveysPage() {
                   Alumnos Asignados
                 </div>
                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                  {assignments.length === 0 ? (
+                  {currentAssignments.length === 0 ? (
                     <p className="text-xs text-muted-foreground p-2">Sin asignaciones aún.</p>
-                  ) : assignments.map(a => (
+                  ) : currentAssignments.map(a => (
                     <button 
                       key={a.id} 
                       onClick={() => setSelectedResultStudent(a.student_id)}
@@ -419,7 +442,7 @@ export default function TrainerSurveysPage() {
                     <p className="text-xs mt-1 text-muted-foreground">Selecciona un alumno para ver sus respuestas</p>
                   </div>
                 ) : (() => {
-                  const assignment = assignments.find(a => a.student_id === selectedResultStudent);
+                  const assignment = currentAssignments.find(a => a.student_id === selectedResultStudent);
                   if (!assignment) return null;
                   
                   if (!assignment.completed) {
@@ -432,7 +455,7 @@ export default function TrainerSurveysPage() {
                     );
                   }
 
-                  const studentAnswers = answers.filter(ans => ans.student_id === selectedResultStudent);
+                  const studentAnswers = currentAnswers.filter(ans => ans.student_id === selectedResultStudent);
                   
                   return (
                     <div className="space-y-6">

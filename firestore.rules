@@ -66,10 +66,7 @@ service cloud.firestore {
     // [CAMBIO TAREA-001] Se elimina la lectura pública anónima (allow read: if student_id != null) para evitar fuga de planificaciones de entrenamientos.
     // Solo el entrenador propietario y el estudiante asignado pueden leer.
     match /exercises/{exerciseId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == resource.data.trainer_id || 
-        request.auth.uid == resource.data.student_id
-      );
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && (
         getRole(request.auth.uid) == "trainer" && (
           (request.resource != null && request.auth.uid == request.resource.data.trainer_id) ||

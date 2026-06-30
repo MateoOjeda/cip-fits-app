@@ -18,6 +18,23 @@ import {
 const surveyCache = new Map<string, any>();
 const questionsCache = new Map<string, any[]>();
 
+async function getDocsInChunks(collectionName: string, field: string, values: any[]) {
+  if (values.length === 0) return { docs: [] };
+  const uniqueValues = Array.from(new Set(values));
+  const chunkSize = 30; // Firestore limits 'in' queries to 30 items
+  const promises = [];
+  
+  for (let i = 0; i < uniqueValues.length; i += chunkSize) {
+    const chunk = uniqueValues.slice(i, i + chunkSize);
+    promises.push(getDocs(query(collection(db, collectionName), where(field, "in", chunk))));
+  }
+  
+  const snaps = await Promise.all(promises);
+  return {
+    docs: snaps.flatMap(snap => snap.docs)
+  };
+}
+
 export interface SurveyQuestion {
   id: string;
   survey_id: string;
@@ -66,8 +83,7 @@ export async function fetchTrainerSurveys(trainerId: string): Promise<CustomSurv
 
   // Fetch only questions for these surveys
   const surveyIds = surveys.map(s => s.id);
-  const questionsQ = query(collection(db, "survey_questions"), where("survey_id", "in", surveyIds));
-  const questionsSnap = await getDocs(questionsQ);
+  const questionsSnap = await getDocsInChunks("survey_questions", "survey_id", surveyIds);
   const allQuestions = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as SurveyQuestion));
 
   return surveys.map(s => ({
@@ -121,8 +137,7 @@ export async function fetchSurveyAssignments(surveyId: string): Promise<SurveyAs
   
   const studentIds = assignments.map((a) => a.student_id);
   // Fetch profiles only for those specific students
-  const profilesQ = query(collection(db, "profiles"), where("user_id", "in", studentIds));
-  const profilesSnap = await getDocs(profilesQ);
+  const profilesSnap = await getDocsInChunks("profiles", "user_id", studentIds);
   const profiles = profilesSnap.docs.map(d => d.data() as any);
     
   return assignments.map((a) => ({
@@ -160,19 +175,36 @@ export async function deleteSurvey(surveyId: string) {
 
   const deleteQueue: any[] = [];
   
-  // 1. Add survey doc ref
-  deleteQueue.push(doc(db, "custom_surveys", surveyId));
-  
-  // 2. Fetch associated questions and assignments in parallel
+  // 1. Fetch associated questions and assignments in parallel
   const [qSnap, aSnap] = await Promise.all([
     getDocs(query(collection(db, "survey_questions"), where("survey_id", "==", surveyId))),
     getDocs(query(collection(db, "survey_assignments"), where("survey_id", "==", surveyId)))
   ]);
   
+  // 2. Fetch associated answers for these assignments
+  const assignmentIds = aSnap.docs.map(d => d.id);
+  if (assignmentIds.length > 0) {
+    // Partition into chunks of 10 to avoid Firestore 'in' limit
+    const answersPromises: Promise<any>[] = [];
+    for (let i = 0; i < assignmentIds.length; i += 10) {
+      const chunk = assignmentIds.slice(i, i + 10);
+      const answersQ = query(collection(db, "survey_answers"), where("assignment_id", "in", chunk));
+      answersPromises.push(getDocs(answersQ));
+    }
+    const answersSnaps = await Promise.all(answersPromises);
+    answersSnaps.forEach(snap => {
+      snap.docs.forEach(d => deleteQueue.push(d.ref));
+    });
+  }
+
+  // 3. Add questions and assignments to delete queue
   qSnap.docs.forEach(d => deleteQueue.push(d.ref));
   aSnap.docs.forEach(d => deleteQueue.push(d.ref));
 
-  // 3. Commit deletes in batches of 500
+  // 4. Add the main survey doc reference at the very end to guarantee it's deleted last
+  deleteQueue.push(doc(db, "custom_surveys", surveyId));
+
+  // 5. Commit deletes in batches of 500, executing sequentially
   for (let i = 0; i < deleteQueue.length; i += 500) {
     const batch = writeBatch(db);
     const chunk = deleteQueue.slice(i, i + 500);
@@ -216,14 +248,25 @@ export async function fetchStudentPendingSurveys(studentId: string) {
   if (assignments.length === 0) return [];
 
   const surveyIds = assignments.map(a => a.survey_id);
-  const surveysQ = query(collection(db, "custom_surveys"), where("__name__", "in", surveyIds));
-  const surveysSnap = await getDocs(surveysQ);
-  const allSurveys = surveysSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const surveysSnap = await getDocsInChunks("custom_surveys", "__name__", surveyIds);
+  const allSurveys = surveysSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-  return assignments.map(a => ({
-    ...a,
-    survey: allSurveys.find(s => s.id === a.survey_id)
-  }));
+  // Fetch associated questions for these pending surveys
+  const questionsSnap = await getDocsInChunks("survey_questions", "survey_id", surveyIds);
+  const allQuestions = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+  return assignments.map(a => {
+    const survey = allSurveys.find(s => s.id === a.survey_id);
+    if (survey) {
+      survey.questions = allQuestions
+        .filter(q => q.survey_id === survey.id)
+        .sort((x, y) => x.order_index - y.order_index);
+    }
+    return {
+      ...a,
+      survey
+    };
+  });
 }
 
 export async function fetchSurveyWithQuestions(surveyId: string) {
@@ -276,10 +319,9 @@ export async function fetchStudentSurveyResults(studentId: string) {
   const surveyIds = assignments.map(a => a.survey_id);
   const assignmentIds = assignments.map(a => a.id);
 
-  // Fetch only needed surveys, questions and answers
-  // We use batching/parallelization for larger sets, but for 10 ids "in" works fine
-  const targetSurveyIds = surveyIds.slice(0, 10);
-  const targetAssignmentIds = assignmentIds.slice(0, 10);
+  // Fetch only needed surveys, questions and answers (unsliced)
+  const targetSurveyIds = surveyIds;
+  const targetAssignmentIds = assignmentIds;
 
   // Find missing survey definitions from cache
   const missingSurveyIds = targetSurveyIds.filter(id => !surveyCache.has(id));
@@ -287,12 +329,12 @@ export async function fetchStudentSurveyResults(studentId: string) {
 
   const [surveysSnap, questionsSnap, answersSnap] = await Promise.all([
     missingSurveyIds.length > 0
-      ? getDocs(query(collection(db, "custom_surveys"), where("__name__", "in", missingSurveyIds)))
+      ? getDocsInChunks("custom_surveys", "__name__", missingSurveyIds)
       : Promise.resolve({ docs: [] }),
     missingQuestionSurveyIds.length > 0
-      ? getDocs(query(collection(db, "survey_questions"), where("survey_id", "in", missingQuestionSurveyIds)))
+      ? getDocsInChunks("survey_questions", "survey_id", missingQuestionSurveyIds)
       : Promise.resolve({ docs: [] }),
-    getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", targetAssignmentIds)))
+    getDocsInChunks("survey_answers", "assignment_id", targetAssignmentIds)
   ]);
 
   // Update caches

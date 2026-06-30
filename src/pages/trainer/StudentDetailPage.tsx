@@ -428,7 +428,7 @@ export default function StudentDetailPage() {
                   <Dumbbell className="h-5 w-5 text-primary" />
                   Rutina Asignada
                 </div>
-                {loadingHistory && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {isLoadingRoutines && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -545,7 +545,7 @@ export default function StudentDetailPage() {
 
 
         <TabsContent value="surveys">
-          {loadingHistory ? (
+          {isLoadingSurveysPending || isLoadingSurveysResults ? (
             <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : viewingSurvey ? (
             <div className="space-y-4">

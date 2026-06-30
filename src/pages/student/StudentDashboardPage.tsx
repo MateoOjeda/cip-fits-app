@@ -26,7 +26,9 @@ import {
   ExternalLink,
   ChevronRight,
   ClipboardList,
-  Flame // Added since Dumbbell use it
+  Flame,
+  Apple,
+  Dumbbell
 } from "lucide-react";
 import { formatDistanceToNow, addDays, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -121,11 +123,24 @@ export default function StudentDashboardPage() {
   
   const daysRemaining = Math.max(0, differenceInDays(nextPaymentDate, new Date()));
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Buenos días";
+    if (hour < 20) return "Buenas tardes";
+    return "Buenas noches";
+  };
+
+  const formattedDate = new Date().toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  });
+
   return (
-    <div className="max-w-4xl mx-auto pb-24 space-y-8 animate-in fade-in duration-300">
+    <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* PROFILE HEADER SECTION */}
-      <div className="relative pt-6">
-        <div className="flex flex-col items-center text-center space-y-4">
+      <div className="relative pt-6 pb-4 border-b border-border/40">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
           <div className="relative">
             <ProfilePhotoUpload 
               avatarUrl={profile?.avatar_url} 
@@ -133,51 +148,94 @@ export default function StudentDashboardPage() {
               onUploaded={(url) => setProfile(prev => ({ ...prev, avatar_url: url }))}
             />
             {isPaid && (
-              <div className="absolute -bottom-0.5 -left-0.5 h-6 w-6 bg-primary rounded-full border-2 border-background flex items-center justify-center shadow-md">
+              <div className="absolute -bottom-0.5 -right-0.5 h-6 w-6 bg-primary rounded-full border-2 border-background flex items-center justify-center shadow-md">
                 <Crown className="h-3.5 w-3.5 text-primary-foreground" />
               </div>
             )}
           </div>
 
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
-            <div className="flex flex-col items-center gap-1.5">
-              <p className="text-xs text-muted-foreground font-medium">{hasPlan ? "Alumno Activo" : "Sin Plan Asignado"}</p>
-              {pendingSurveys.length > 0 && (
-                <Badge 
-                  className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-semibold px-3 py-1 flex items-center gap-1.5 cursor-pointer hover:bg-amber-500/15 transition-colors"
-                  onClick={() => document.getElementById('encuestas-section')?.scrollIntoView({ behavior: 'smooth' })}
-                >
-                  <ClipboardList className="h-3 w-3" />
-                  Tienes encuestas pendientes
+          <div className="space-y-1.5 flex-1 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{getGreeting()}</p>
+                <h1 className="text-xl font-bold tracking-tight text-foreground mt-0.5">{displayName}</h1>
+                <p className="text-xs text-muted-foreground font-medium capitalize mt-1">{formattedDate}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+                <Badge variant="outline" className={cn(
+                  "border-none shadow-none text-[9px] font-bold px-2.5 py-1 rounded-md",
+                  hasPlan ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  {hasPlan ? "Alumno Activo" : "Sin Plan Asignado"}
                 </Badge>
-              )}
+                {pendingSurveys.length > 0 && (
+                  <Badge 
+                    className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-md text-[9px] font-bold px-2.5 py-1 flex items-center gap-1.5 cursor-pointer hover:bg-amber-500/15 transition-all transition-ds"
+                    onClick={() => document.getElementById('encuestas-section')?.scrollIntoView({ behavior: 'smooth' })}
+                  >
+                    <ClipboardList className="h-3.5 w-3.5 animate-pulse text-amber-500" />
+                    {pendingSurveys.length} {pendingSurveys.length === 1 ? "Encuesta pendiente" : "Encuestas pendientes"}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* QUICK ACTIONS SECTION */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Accesos Rápidos</span>
+          <div className="h-[1px] w-full bg-border/50" />
+        </div>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Ver Rutinas", path: "/student/routines", icon: Dumbbell, color: "text-primary bg-primary/10 border-primary/20 hover:bg-primary/15" },
+            { label: "Ver Planes", path: "/student/plans", icon: FileText, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/15" },
+            { label: "Mi Progreso", path: "/student/progress", icon: ArrowUpCircle, color: "text-blue-500 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/15" },
+            { label: "Mis Comidas", path: "/student/meals", icon: Apple, color: "text-orange-500 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/15" }
+          ].map((action, idx) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={idx}
+                onClick={() => navigate(action.path)}
+                className={cn(
+                  "flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] transition-ds shadow-sm",
+                  action.color
+                )}
+              >
+                <Icon className="h-5 w-5 mb-2" />
+                <span className="text-xs font-bold">{action.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       
       {/* PLAN & PAYMENT SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+        <Card className="border border-border/40 bg-card/60 shadow-sm hover:border-primary/20 transition-all duration-200 rounded-2xl">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-[10px] font-bold">
                   <CreditCard className="h-3.5 w-3.5" />
-                  <span>Estado de Suscripción</span>
+                  <span>Suscripción</span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                  <h3 className="text-base font-bold tracking-tight text-foreground">
                     {isPaid ? "Mes Abonado" : "Pago Pendiente"}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex items-center gap-2 mt-1">
                     {isPaid ? (
-                      <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 rounded-full text-[10px] font-bold px-2.5 py-0.5">
+                      <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 rounded-md text-[9px] font-bold px-2 py-0.5">
                         <CheckCircle2 className="h-3 w-3 mr-1 inline" /> AL DÍA
                       </Badge>
                     ) : (
-                      <Badge variant="destructive" className="bg-destructive/10 text-destructive border border-destructive/20 rounded-full text-[10px] font-bold px-2.5 py-0.5">
+                      <Badge variant="destructive" className="bg-destructive/10 text-destructive border border-destructive/20 rounded-md text-[9px] font-bold px-2 py-0.5">
                         <XCircle className="h-3 w-3 mr-1 inline" /> PENDIENTE
                       </Badge>
                     )}
@@ -185,48 +243,48 @@ export default function StudentDashboardPage() {
                 </div>
               </div>
               <div className={cn(
-                "h-12 w-12 rounded-xl flex items-center justify-center shadow-sm",
-                isPaid ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-destructive/10 text-destructive"
+                "h-10 w-10 rounded-lg flex items-center justify-center shadow-sm border",
+                isPaid ? "bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400" : "bg-destructive/10 text-destructive border-destructive/20"
               )}>
-                <CreditCard className="h-6 w-6" />
+                <CreditCard className="h-5 w-5" />
               </div>
             </div>
             
             <Button 
               variant="outline" 
-              className="w-full mt-6 h-9 gap-2 rounded-xl border-border/60 hover:bg-muted/10 transition-all text-xs font-semibold"
+              className="w-full mt-5 h-8 gap-2 rounded-lg border-border/60 hover:bg-muted/10 transition-all text-xs font-semibold"
               onClick={() => navigate("/student/plans")}
             >
-              <ArrowUpCircle className="h-4 w-4 text-primary" />
+              <ArrowUpCircle className="h-3.5 w-3.5 text-primary" />
               <span>Ver Planes</span>
             </Button>
           </CardContent>
         </Card>
 
         {isPaid ? (
-          <Card className="border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+          <Card className="border border-border/40 bg-card/60 shadow-sm hover:border-primary/20 transition-all duration-200 rounded-2xl">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-[10px] font-bold">
                     <Clock className="h-3.5 w-3.5" />
                     <span>Próximo Vencimiento</span>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold tracking-tight text-foreground">
-                      {daysRemaining} Días
+                    <h3 className="text-base font-bold tracking-tight text-foreground">
+                      {daysRemaining} Días restantes
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Restantes de tu ciclo de entrenamiento
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      De tu ciclo de entrenamiento actual
                     </p>
                   </div>
                 </div>
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-sm">
-                  <Clock className="h-6 w-6" />
+                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+                  <Clock className="h-5 w-5" />
                 </div>
               </div>
               
-              <div className="mt-6 w-full h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="mt-5 w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary transition-all duration-500" 
                   style={{ width: `${Math.max(0, Math.min(100, (daysRemaining / 30) * 100))}%` }} 
@@ -236,12 +294,12 @@ export default function StudentDashboardPage() {
           </Card>
         ) : (
           <Card className="border border-destructive/20 bg-destructive/5 dark:bg-destructive/10 shadow-sm rounded-2xl flex flex-col justify-center">
-            <CardContent className="p-6 text-center space-y-3">
-              <div className="h-12 w-12 bg-destructive/15 rounded-full flex items-center justify-center mx-auto text-destructive">
+            <CardContent className="p-6 text-center space-y-2">
+              <div className="h-10 w-10 bg-destructive/15 rounded-full flex items-center justify-center mx-auto text-destructive">
                 <CreditCard className="h-5 w-5" />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-destructive">Renovar suscripción</h3>
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-bold text-destructive">Renovar suscripción</h3>
                 <p className="text-xs text-muted-foreground leading-normal">
                   Tu periodo de entrenamiento ha finalizado. Ponte en contacto con tu entrenador para renovar el servicio.
                 </p>
@@ -260,29 +318,29 @@ export default function StudentDashboardPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {studentData?.plan_entrenamiento && (
-            <Card className="bg-card border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition-all">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
-                <Dumbbell className="h-5 w-5" />
+            <Card className="bg-card/50 border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:border-primary/30 transition-all transition-ds">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                <Dumbbell className="h-4.5 w-4.5" />
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Entrenamiento</p>
-                <p className="font-semibold text-sm truncate text-foreground">{studentData.plan_entrenamiento}</p>
+                <p className="font-semibold text-xs truncate text-foreground">{studentData.plan_entrenamiento}</p>
               </div>
             </Card>
           )}
           {studentData?.plan_alimentacion && (
-            <Card className="bg-card border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition-all">
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-                <FileText className="h-5 w-5" />
+            <Card className="bg-card/50 border border-border/40 rounded-xl p-4 flex items-center gap-4 hover:border-emerald-500/30 transition-all transition-ds">
+              <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                <FileText className="h-4.5 w-4.5" />
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Nutrición</p>
-                <p className="font-semibold text-sm truncate text-foreground">{studentData.plan_alimentacion}</p>
+                <p className="font-semibold text-xs truncate text-foreground">{studentData.plan_alimentacion}</p>
               </div>
             </Card>
           )}
           {!studentData?.plan_entrenamiento && !studentData?.plan_alimentacion && (
-            <Card className="bg-card border border-dashed border-border/80 rounded-xl p-6 text-center col-span-full">
+            <Card className="bg-card/30 border border-dashed border-border/80 rounded-xl p-6 text-center col-span-full">
               <p className="text-xs text-muted-foreground font-medium">No tienes planes asignados actualmente</p>
             </Card>
           )}
@@ -290,18 +348,18 @@ export default function StudentDashboardPage() {
       </div>
 
       {/* ENCUESTAS SECTION */}
-      <div id="encuestas-section" className="space-y-4 pt-4">
+      <div id="encuestas-section" className="space-y-3 pt-2">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
             <ClipboardList className="h-4 w-4" />
           </div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground">Encuestas Pendientes</h2>
+          <h2 className="text-base font-bold tracking-tight text-foreground">Encuestas Pendientes</h2>
         </div>
 
         {pendingSurveys.length === 0 ? (
-          <Card className="border border-border/40 bg-card py-6 text-center shadow-sm">
+          <Card className="border border-border/40 bg-card/40 py-5 text-center shadow-sm rounded-xl">
             <CardContent className="p-0 flex flex-col items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-emerald-500/70 mb-2" />
+              <CheckCircle2 className="h-5 w-5 text-emerald-500/70 mb-1.5" />
               <p className="text-xs text-muted-foreground font-medium">
                 No tienes encuestas pendientes por el momento
               </p>
@@ -312,22 +370,22 @@ export default function StudentDashboardPage() {
             {pendingSurveys.map((asst) => (
               <Card 
                 key={asst.id} 
-                className="border border-border/50 bg-card hover:bg-muted/10 transition-all duration-200 rounded-xl p-4 cursor-pointer shadow-sm"
+                className="border border-border/40 bg-card/60 hover:border-primary/30 transition-all duration-200 rounded-xl p-4 cursor-pointer shadow-sm group"
                 onClick={() => setActiveSurvey(asst)}
               >
                 <CardContent className="p-0 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/20 shrink-0 shadow-sm">
-                      <ClipboardList className="h-5 w-5 text-primary" />
+                    <div className="h-9 w-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/20 shrink-0 shadow-sm transition-colors group-hover:bg-primary/20">
+                      <ClipboardList className="h-4.5 w-4.5 text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-sm text-foreground truncate leading-tight mb-1">{asst.survey?.title}</h3>
-                      <Badge variant="outline" className="text-[8px] font-bold uppercase tracking-wider bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-500 px-2 py-0.5 rounded-md">
+                      <h3 className="font-semibold text-xs text-foreground truncate leading-tight mb-1">{asst.survey?.title}</h3>
+                      <Badge variant="outline" className="text-[8px] font-bold uppercase tracking-wider bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-500 px-1.5 py-0.5 rounded-md">
                         Pendiente
                       </Badge>
                     </div>
                   </div>
-                  <Button className="h-8 px-4 rounded-lg text-xs font-semibold shrink-0">
+                  <Button className="h-7 px-3 rounded-lg text-xs font-semibold shrink-0">
                     Responder
                   </Button>
                 </CardContent>
@@ -338,20 +396,20 @@ export default function StudentDashboardPage() {
       </div>
 
       {/* NOTIFICATIONS SECTION */}
-      <div className="space-y-4 pt-4">
+      <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+            <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <Bell className="h-4 w-4" />
             </div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">Novedades</h2>
+            <h2 className="text-base font-bold tracking-tight text-foreground">Novedades</h2>
           </div>
           <div className="flex items-center gap-2">
             {notifications.length > 0 && (
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="text-[10px] font-bold uppercase text-muted-foreground hover:text-primary h-7 px-2 hover:bg-muted/50"
+                className="text-[9px] font-bold uppercase text-muted-foreground hover:text-primary h-6 px-2 hover:bg-muted/50 rounded-lg"
                 onClick={async () => {
                   const readIdsStr = localStorage.getItem(`read_notifications_${user?.uid}`);
                   const readIds = readIdsStr ? JSON.parse(readIdsStr) : [];
@@ -364,15 +422,15 @@ export default function StudentDashboardPage() {
                 Limpiar todo
               </Button>
             )}
-            <Badge variant="outline" className="rounded-md text-[9px] font-semibold uppercase text-muted-foreground border-border px-2.5 py-0.5">
+            <Badge variant="outline" className="rounded-md text-[8px] font-bold uppercase text-muted-foreground border-border px-2 py-0.5">
               Recientes
             </Badge>
           </div>
         </div>
 
         {notifications.length === 0 ? (
-          <div className="py-10 text-center border border-dashed border-border rounded-xl bg-card">
-            <Bell className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+          <div className="py-8 text-center border border-dashed border-border rounded-xl bg-card/30">
+            <Bell className="h-6 w-6 mx-auto text-muted-foreground/45 mb-1.5" />
             <p className="text-xs text-muted-foreground font-medium">Sin novedades por ahora</p>
           </div>
         ) : (
@@ -407,20 +465,20 @@ export default function StudentDashboardPage() {
               return (
                 <Card 
                   key={change.id} 
-                  className="border border-border/40 bg-card hover:bg-muted/10 transition-all rounded-xl p-4 group relative"
+                  className="border border-border/40 bg-card/50 hover:border-primary/20 transition-all rounded-xl p-4 group relative"
                 >
                   <CardContent className="p-0 flex items-start gap-4">
-                    <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40">
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0 pr-16">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[9px] font-bold text-primary uppercase tracking-wider">{config.label}</span>
-                        <span className="text-[9px] font-medium text-muted-foreground/75">
+                        <span className="text-[8px] font-bold text-primary uppercase tracking-wider">{config.label}</span>
+                        <span className="text-[8px] font-medium text-muted-foreground/75">
                           {formatDistanceToNow(new Date(change.created_at), { addSuffix: true, locale: es })}
                         </span>
                       </div>
-                      <p className="text-sm font-semibold text-foreground leading-tight">
+                      <p className="text-xs font-semibold text-foreground leading-snug">
                         {change.description}
                       </p>
                     </div>
@@ -429,18 +487,18 @@ export default function StudentDashboardPage() {
                       <Button 
                         size="icon" 
                         variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
                         onClick={handleNavigate}
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <ExternalLink className="h-3 w-3" />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost" 
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
                         onClick={handleDelete}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </CardContent>

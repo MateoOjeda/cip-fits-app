@@ -19,7 +19,12 @@ import { useStudentRoutines } from "@/hooks/useStudentRoutines";
 import { fetchRoutineExercises } from "@/services/routineManager";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PremiumCard, PremiumCardContent, PremiumCardHeader, PremiumCardTitle } from "@/components/ui/premium-card";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { TimelineCard } from "@/components/ui/timeline-card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Dumbbell, CheckCircle, Apple, Loader2, Sparkles, Pencil, Archive, Users, ClipboardList, ChevronRight, AlertCircle, Clock, Mail, Phone, Target, TrendingUp, Heart, Info, Calendar } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -343,13 +348,21 @@ export default function StudentDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState("weight");
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("trainer_active_detail_tab") || "summary");
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; planType: string; level: string } | null>(null);
   const [editingPlans, setEditingPlans] = useState(false);
 
   const [expandedRoutine, setExpandedRoutine] = useState<string | null>(null);
   const [routineExercises, setRoutineExercises] = useState<any[]>([]);
-  const [selectedDayTab, setSelectedDayTab] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
+  const [selectedDayTab, setSelectedDayTab] = useState<string>(() => localStorage.getItem("trainer_selected_routine_day") || DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
+
+  useEffect(() => {
+    localStorage.setItem("trainer_active_detail_tab", activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem("trainer_selected_routine_day", selectedDayTab);
+  }, [selectedDayTab]);
   const [viewingSurvey, setViewingSurvey] = useState<{ type: 'custom' | 'diagnostic', id?: string, data?: any } | null>(null);
 
   // 1. Fetch Student Profile
@@ -529,6 +542,24 @@ export default function StudentDetailPage() {
   };
 
 
+  const { exercisesByDay, groupExercisesByDay } = useMemo(() => {
+    const exercisesByDay: Record<string, Exercise[]> = {};
+    const list = exercises || [];
+    list.forEach((ex) => {
+      if (!exercisesByDay[ex.day]) exercisesByDay[ex.day] = [];
+      exercisesByDay[ex.day].push(ex);
+    });
+
+    const groupExercisesByDay: Record<string, any[]> = {};
+    const groupList = groupExercises || [];
+    groupList.forEach((ex) => {
+      if (!groupExercisesByDay[ex.day]) groupExercisesByDay[ex.day] = [];
+      groupExercisesByDay[ex.day].push(ex);
+    });
+
+    return { exercisesByDay, groupExercisesByDay };
+  }, [exercises, groupExercises]);
+
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
   if (!profile) {
@@ -540,35 +571,11 @@ export default function StudentDetailPage() {
     );
   }
 
-  const { exercisesByDay, groupExercisesByDay } = useMemo(() => {
-    const exercisesByDay: Record<string, Exercise[]> = {};
-    exercises.forEach((ex) => {
-      if (!exercisesByDay[ex.day]) exercisesByDay[ex.day] = [];
-      exercisesByDay[ex.day].push(ex);
-    });
-
-    const groupExercisesByDay: Record<string, any[]> = {};
-    groupExercises.forEach((ex) => {
-      if (!groupExercisesByDay[ex.day]) groupExercisesByDay[ex.day] = [];
-      groupExercisesByDay[ex.day].push(ex);
-    });
-
-    return { exercisesByDay, groupExercisesByDay };
-  }, [exercises, groupExercises]);
-
-
-
-
   const nextPaymentDate = routineNextChange 
     ? new Date(routineNextChange)
     : addDays(new Date(profile?.created_at || new Date()), 30);
   const daysRemaining = Math.max(0, differenceInDays(nextPaymentDate, new Date()));
   const hasPlan = selectedEntrenamiento !== "none" || selectedAlimentacion !== "none";
-
-  // Initializing activeTab to 'summary' for the new SaaS CRM layout
-  useEffect(() => {
-    setActiveTab("summary");
-  }, []);
 
   return (
     <div className="max-w-7xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
@@ -804,10 +811,12 @@ export default function StudentDetailPage() {
                   </div>
                   
                   {[...pendingSurveys, ...surveyResults].length === 0 ? (
-                    <div className="py-10 text-center border rounded-xl border-dashed bg-card/30">
-                      <ClipboardList className="h-6 w-6 mx-auto text-muted-foreground/35 mb-2" />
-                      <p className="text-xs text-muted-foreground italic">No hay encuestas asignadas actualmente.</p>
-                    </div>
+                    <EmptyState
+                      type="empty"
+                      title="Sin encuestas asignadas"
+                      description="No hay encuestas personalizadas configuradas o asignadas para este alumno."
+                      className="py-10"
+                    />
                   ) : (
                     <div className="space-y-2">
                       {/* Pending Custom Surveys */}
@@ -815,23 +824,21 @@ export default function StudentDetailPage() {
                         <button 
                           key={item.id}
                           type="button"
-                          className="w-full flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/40 hover:border-primary/20 transition-all transition-ds text-left"
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-card/50 border border-border/40 hover:border-primary/20 hover:scale-[1.005] transition-all duration-200 text-left shadow-sm"
                           onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                            <div className="h-9 w-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                               <ClipboardList className="h-4.5 w-4.5 text-amber-500" />
                             </div>
                             <div>
                               <span className="text-xs font-bold block text-foreground leading-tight">{item.survey?.title || "Encuesta Personalizada"}</span>
-                              <span className="text-[9px] text-muted-foreground mt-0.5 block">Asignada, esperando respuesta</span>
+                              <span className="text-[9.5px] text-muted-foreground mt-0.5 block">Asignada, esperando respuesta del alumno</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none text-[8px] font-bold px-1.5 py-0.5 rounded-md">
-                              Pendiente
-                            </Badge>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <StatusBadge status="pendiente" className="scale-90" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
                           </div>
                         </button>
                       ))}
@@ -841,25 +848,23 @@ export default function StudentDetailPage() {
                         <button 
                           key={item.id}
                           type="button"
-                          className="w-full flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/40 hover:border-primary/20 transition-all transition-ds text-left"
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-card/50 border border-border/40 hover:border-primary/20 hover:scale-[1.005] transition-all duration-200 text-left shadow-sm"
                           onClick={() => setViewingSurvey({ type: 'custom', id: item.id, data: item })}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
+                            <div className="h-9 w-9 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
                               <ClipboardList className="h-4.5 w-4.5 text-green-500" />
                             </div>
                             <div>
                               <span className="text-xs font-bold block text-foreground leading-tight">{item.survey?.title || "Encuesta Personalizada"}</span>
-                              <span className="text-[9px] text-muted-foreground mt-0.5 block">
+                              <span className="text-[9.5px] text-muted-foreground mt-0.5 block">
                                 Completada el {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : "Recientemente"}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-none text-[8px] font-bold px-1.5 py-0.5 rounded-md">
-                              Completada
-                            </Badge>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <StatusBadge status="completado" className="scale-90" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
                           </div>
                         </button>
                       ))}
@@ -961,27 +966,29 @@ export default function StudentDetailPage() {
                   <div className="h-[1px] bg-border/40 w-full" />
 
                   {archivedRoutines.length === 0 ? (
-                    <div className="text-center py-6">
-                      <Archive className="h-6 w-6 mx-auto text-muted-foreground/35 mb-2" />
-                      <p className="text-xs text-muted-foreground font-medium">Sin rutinas archivadas en el historial</p>
-                    </div>
+                    <EmptyState
+                      type="empty"
+                      title="Sin rutinas archivadas"
+                      description="No hay rutinas anteriores o archivadas en el historial de este alumno."
+                      className="py-8"
+                    />
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {archivedRoutines.map((r: any) => (
-                        <div key={r.id} className="border border-border/40 rounded-xl p-3 bg-card/40 hover:border-primary/20 transition-all transition-ds">
+                        <div key={r.id} className="border border-border/40 rounded-2xl p-4 bg-card/40 hover:border-primary/20 transition-all duration-200 shadow-sm">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <p className="text-xs font-semibold text-foreground">
+                              <p className="text-xs font-bold text-foreground">
                                 Rutina de {LEVEL_LABELS[r.level] || r.level}
                               </p>
-                              <p className="text-[9px] text-muted-foreground mt-0.5">
+                              <p className="text-[9.5px] text-muted-foreground mt-0.5 font-semibold">
                                 Asignada el {new Date(r.assigned_at).toLocaleDateString()} · {r.completed_count || 0} entrenamientos
                               </p>
                             </div>
                             <Button 
-                              variant="ghost" 
+                              variant="outline" 
                               size="sm" 
-                              className="h-7 text-[9px] font-bold text-primary hover:bg-primary/10 rounded-lg px-2"
+                              className="h-7 text-[9px] font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 rounded-lg px-3"
                               onClick={() => handleExpandRoutine(r.id)}
                             >
                               {expandedRoutine === r.id ? "Ocultar" : "Ver Ejercicios"}
@@ -989,16 +996,18 @@ export default function StudentDetailPage() {
                           </div>
 
                           {expandedRoutine === r.id && (
-                            <div className="mt-3 pt-3 border-t border-border/40 space-y-1.5 animate-in fade-in duration-200">
+                            <div className="mt-4 pt-3.5 border-t border-border/40 space-y-1.5 animate-in fade-in duration-200">
                               {routineExercises.length === 0 ? (
-                                <p className="text-[10px] text-muted-foreground italic text-center py-2">Cargando ejercicios...</p>
+                                <p className="text-[10px] text-muted-foreground italic text-center py-2">Cargando lista de ejercicios...</p>
                               ) : (
-                                routineExercises.map((ex: any) => (
-                                  <div key={ex.id} className="flex justify-between items-center text-[10px] p-2 bg-secondary/10 rounded-md">
-                                    <span className="font-medium text-foreground/80">{ex.name}</span>
-                                    <span className="text-muted-foreground font-semibold">{ex.sets}×{ex.reps} · {ex.weight}kg</span>
-                                  </div>
-                                ))
+                                <div className="grid grid-cols-1 gap-1.5">
+                                  {routineExercises.map((ex: any) => (
+                                    <div key={ex.id} className="flex justify-between items-center text-[10px] p-2.5 bg-secondary/15 border border-border/30 rounded-xl">
+                                      <span className="font-semibold text-foreground/85">{ex.name}</span>
+                                      <span className="text-muted-foreground font-bold">{ex.sets}×{ex.reps} · {ex.weight}kg</span>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           )}

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
@@ -14,7 +15,7 @@ interface StudentCardProps {
   size?: "sm" | "md" | "lg";
 }
 
-export function StudentCard({
+export const StudentCard = memo(function StudentCard({
   name,
   avatarUrl,
   avatarInitials,
@@ -80,4 +81,4 @@ export function StudentCard({
       )}
     </div>
   );
-}
+});

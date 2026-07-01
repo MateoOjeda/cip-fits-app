@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -24,21 +25,48 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("ErrorBoundary caught:", error, info);
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.reload();
+  };
+
+  handleGoHome = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.href = "/";
+  };
+
   render() {
     if (this.state.hasError) {
       return this.props.fallback ?? (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="text-center space-y-4 max-w-md">
-            <h2 className="text-xl font-bold text-foreground">Ocurrió un error</h2>
-            <p className="text-muted-foreground text-sm">
-              {this.state.error?.message || "Ocurrió un error al cargar la información"}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
-            >
-              Recargar página
-            </button>
+        <div className="min-h-screen bg-background dark:bg-zinc-950 flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="max-w-md w-full border border-border/50 bg-card/60 backdrop-blur-md rounded-2xl shadow-2xl p-6 text-center space-y-6">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive mx-auto">
+              <AlertTriangle className="h-6 w-6 animate-pulse" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-base font-bold text-foreground">Algo no salió como esperábamos</h2>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-sm mx-auto">
+                {this.state.error?.message || "Ocurrió un error inesperado al procesar la información en esta pantalla."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={this.handleReset}
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-sm"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Reintentar
+              </button>
+              <button
+                onClick={this.handleGoHome}
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl text-xs font-semibold border border-border hover:bg-muted/15 transition-all text-foreground"
+              >
+                <Home className="h-3.5 w-3.5 text-muted-foreground" />
+                Ir al Inicio
+              </button>
+            </div>
           </div>
         </div>
       );

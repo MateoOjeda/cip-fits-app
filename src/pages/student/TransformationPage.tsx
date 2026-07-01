@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 interface Transformation {
   id: string;
@@ -163,8 +164,12 @@ export default function TransformationPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-muted animate-pulse rounded-lg" />
+          <div className="h-4 w-72 bg-muted animate-pulse rounded-lg" />
+        </div>
+        <LoadingSkeleton type="card" count={2} />
       </div>
     );
   }

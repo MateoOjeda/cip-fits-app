@@ -14,6 +14,13 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PremiumCard, PremiumCardContent, PremiumCardHeader, PremiumCardTitle } from "@/components/ui/premium-card";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DataToolbar } from "@/components/ui/data-toolbar";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,8 +65,21 @@ export default function TrainingGroupsPage() {
   const [groups, setGroups] = useState<TrainingGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [newGroupName, setNewGroupName] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem("trainer_groups_search") || "");
   const [creating, setCreating] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(() => localStorage.getItem("trainer_selected_group_id"));
+
+  useEffect(() => {
+    localStorage.setItem("trainer_groups_search", searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (selectedGroupId) {
+      localStorage.setItem("trainer_selected_group_id", selectedGroupId);
+    } else {
+      localStorage.removeItem("trainer_selected_group_id");
+    }
+  }, [selectedGroupId]);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [exercises, setExercises] = useState<GroupExercise[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -266,111 +286,222 @@ export default function TrainingGroupsPage() {
   const memberStudentIds = new Set(members.map((m) => m.student_id));
   const availableStudentsForGroup = students.filter((s) => !memberStudentIds.has(s.user_id));
 
-  if (loading || loadingStudents) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  if (loading || loadingStudents) {
+    return (
+      <div className="max-w-6xl mx-auto pb-24 space-y-6">
+        <LoadingSkeleton type="details" />
+      </div>
+    );
+  }
+
+  const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="max-w-6xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Grupos de Entrenamiento</h1>
-          <p className="text-sm text-muted-foreground mt-1">Crea grupos y asigna rutinas colectivas de forma eficiente</p>
-        </div>
+      <SectionHeader
+        title="Grupos de Entrenamiento"
+        description="Crea grupos y asigna rutinas colectivas de forma eficiente."
+      />
+
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <PremiumCard className="hover:border-primary/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Grupos Creados</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{groups.length} Activos</h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
+
+        <PremiumCard className="hover:border-blue-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Miembros en Grupo</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">
+                {selectedGroup ? `${members.length} Integrantes` : "Sin seleccionar"}
+              </h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
+
+        <PremiumCard className="hover:border-emerald-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <Dumbbell className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Rutinas de Grupo</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">
+                {selectedGroup ? `${exercises.length} Ejercicios` : "Sin seleccionar"}
+              </h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
       </div>
 
-      <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex gap-2">
-            <Input placeholder="Nombre del grupo (ej: Principiantes Mañana)" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createGroup()} className="flex-1 text-xs" />
-            <Button onClick={createGroup} disabled={creating || !newGroupName.trim()} size="sm" className="gap-1.5 text-xs font-semibold"><Plus className="h-4 w-4" /> Crear Grupo</Button>
+      <PremiumCard className="overflow-hidden">
+        <PremiumCardContent className="p-5 space-y-3.5">
+          <div className="space-y-1">
+            <Label htmlFor="group-name-input" className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Nuevo Grupo de Entrenamiento</Label>
+            <p className="text-[10px] text-muted-foreground ml-0.5">Asigna un nombre descriptivo para identificar a tus alumnos grupales (ej: Principiantes Mañana, Fuerza Avanzado).</p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Users className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-muted-foreground/60" />
+              <Input 
+                id="group-name-input"
+                placeholder="Nombre del grupo..." 
+                value={newGroupName} 
+                onChange={(e) => setNewGroupName(e.target.value)} 
+                onKeyDown={(e) => e.key === "Enter" && createGroup()} 
+                className="pl-11 h-12 text-xs border-border/50 bg-secondary/15 hover:bg-secondary/25 focus-visible:ring-primary/20" 
+              />
+            </div>
+            <Button onClick={createGroup} disabled={creating || !newGroupName.trim()} className="h-12 rounded-xl text-xs font-bold px-6 shadow-sm shrink-0">
+              {creating ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4.5 w-4.5 mr-1.5" />} 
+              Crear Grupo
+            </Button>
+          </div>
+        </PremiumCardContent>
+      </PremiumCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-3">
-          <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1">Mis Grupos</h2>
-          {groups.length === 0 ? (
-            <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-              <CardContent className="p-6 text-center">
-                <Users className="h-8 w-8 mx-auto text-muted-foreground/45 mb-2.5" />
-                <p className="text-xs text-muted-foreground font-medium">Sin grupos creados</p>
-              </CardContent>
-            </Card>
-          ) : groups.map((g) => (
-            <Card 
+          <div className="space-y-2">
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1">Mis Grupos ({filteredGroups.length})</h2>
+            <div className="px-1">
+              <SearchInput
+                placeholder="Buscar grupo..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onClear={() => setSearchQuery("")}
+                className="h-8.5 rounded-lg"
+              />
+            </div>
+          </div>
+          {filteredGroups.length === 0 ? (
+            <EmptyState
+              type={searchQuery ? "no-results" : "empty"}
+              title={searchQuery ? "Sin coincidencias" : "Sin grupos"}
+              description={searchQuery ? "No se encontraron grupos que coincidan." : "No tienes grupos creados."}
+              className="py-6 min-h-[150px]"
+            />
+          ) : filteredGroups.map((g) => (
+            <PremiumCard 
               key={g.id} 
               className={cn(
-                "cursor-pointer transition-all duration-200 rounded-xl shadow-sm",
+                "cursor-pointer transition-all duration-200 rounded-2xl border shadow-sm hover:scale-[1.01]",
                 selectedGroupId === g.id 
-                  ? "bg-primary/5 border-primary/30" 
-                  : "bg-card border-border/50 hover:bg-muted/10"
+                  ? "bg-primary/5 border-primary/30 shadow-md" 
+                  : "bg-card border-border/40 hover:bg-muted/10"
               )} 
               onClick={() => setSelectedGroupId(g.id)}
             >
-              <CardContent className="p-4 flex items-center justify-between">
+              <PremiumCardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/25">
                     <Users className="h-4.5 w-4.5 text-primary" />
                   </div>
-                  <span className="font-semibold text-xs text-foreground">{g.name}</span>
+                  <span className="font-bold text-xs text-foreground truncate max-w-[150px]">{g.name}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md" onClick={(e) => { e.stopPropagation(); setDeleteTarget(g); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </CardContent>
-            </Card>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors" 
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(g); }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </PremiumCardContent>
+            </PremiumCard>
           ))}
         </div>
 
         {selectedGroup ? (
           <div className="lg:col-span-2 space-y-4">
             {loadingDetail ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+              <div className="p-4 border border-border/40 bg-card rounded-2xl"><LoadingSkeleton type="list" count={2} /></div>
             ) : (
               <>
-                <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-                  <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
+                <Card className="border border-border/40 bg-card rounded-2xl shadow-sm overflow-hidden">
+                  <CardHeader className="p-4 border-b border-border/40 bg-muted/20">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                         <Users className="h-4.5 w-4.5 text-primary" />
                         Miembros de "{selectedGroup.name}"
                       </CardTitle>
-                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs font-semibold rounded-lg" onClick={() => setShowAddMembers(!showAddMembers)}>
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-[10px] font-bold rounded-lg border-border" onClick={() => setShowAddMembers(!showAddMembers)}>
                         {showAddMembers ? <X className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
-                        {showAddMembers ? "Cerrar" : "Agregar"}
+                        {showAddMembers ? "Cerrar" : "Agregar Miembros"}
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3 p-4">
+                  <CardContent className="space-y-4 p-4">
                     {showAddMembers && (
-                      <div className="p-4 rounded-xl border border-border/50 bg-muted/30 space-y-3">
-                        <p className="text-xs font-bold text-primary uppercase tracking-wider">Seleccionar alumnos</p>
+                      <div className="p-4 rounded-xl border border-border/40 bg-muted/25 space-y-3.5 animate-in slide-in-from-top-2">
+                        <div className="space-y-0.5">
+                          <Label className="text-[9px] font-bold text-primary uppercase tracking-wider block">Vincular Alumnos al Grupo</Label>
+                          <p className="text-[10px] text-muted-foreground">Selecciona los alumnos para integrarlos y sincronizar rutinas grupales.</p>
+                        </div>
                         {availableStudentsForGroup.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">Todos tus alumnos ya están en este grupo</p>
+                          <p className="text-[11px] text-muted-foreground italic py-2">Todos tus alumnos ya están en este grupo.</p>
                         ) : (
-                          <>
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                          <div className="space-y-3">
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 hide-scrollbar">
                               {availableStudentsForGroup.map((s) => (
-                                <label key={s.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
-                                  <Checkbox checked={selectedStudentIds.has(s.user_id)} onCheckedChange={() => toggleStudentSelection(s.user_id)} />
-                                  <span className="text-xs font-semibold text-foreground">{s.display_name}</span>
+                                <label key={s.user_id} className="flex items-center justify-between p-2.5 rounded-lg border border-border/30 bg-card/60 hover:bg-muted/10 cursor-pointer select-none">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-[9px]">
+                                      {s.display_name.substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <span className="text-xs font-semibold text-foreground">{s.display_name}</span>
+                                  </div>
+                                  <Checkbox 
+                                    checked={selectedStudentIds.has(s.user_id)} 
+                                    onCheckedChange={() => toggleStudentSelection(s.user_id)} 
+                                    className="h-4.5 w-4.5 rounded-md border-border/60 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                  />
                                 </label>
                               ))}
                             </div>
-                            <Button size="sm" onClick={addMembers} disabled={selectedStudentIds.size === 0} className="gap-1.5 h-8 text-xs font-semibold rounded-lg mt-2"><UserPlus className="h-3.5 w-3.5" /> Agregar ({selectedStudentIds.size})</Button>
-                          </>
+                            <Button size="sm" onClick={addMembers} disabled={selectedStudentIds.size === 0} className="gap-1.5 h-8.5 text-xs font-bold rounded-lg mt-2 w-full sm:w-auto"><UserPlus className="h-3.5 w-3.5" /> Confirmar e Integrar ({selectedStudentIds.size})</Button>
+                          </div>
                         )}
                       </div>
                     )}
                     {members.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-6 italic">Sin alumnos vinculados en este grupo</p>
+                      <div className="text-center py-8 space-y-2">
+                        <Users className="h-7 w-7 mx-auto text-muted-foreground/35" />
+                        <p className="text-xs text-muted-foreground font-semibold">El grupo no tiene miembros vinculados</p>
+                      </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1 hide-scrollbar">
                         {members.map((m) => {
                           const student = students.find((s) => s.user_id === m.student_id);
                           return (
-                            <div key={m.id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-muted/30">
-                              <span className="text-xs font-semibold text-foreground">{student?.display_name || m.student_id}</span>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md" onClick={() => removeMember(m.id)}><X className="h-3.5 w-3.5" /></Button>
+                            <div key={m.id} className="flex items-center justify-between p-2.5 rounded-xl border border-border/40 bg-secondary/15 hover:bg-secondary/25 transition-all duration-200">
+                              <div className="flex items-center gap-2.5">
+                                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-[9px] shrink-0 border border-primary/20">
+                                  {(student?.display_name || m.student_id).substring(0, 2).toUpperCase()}
+                                </div>
+                                <span className="text-xs font-semibold text-foreground truncate max-w-[200px]">{student?.display_name || m.student_id}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors" 
+                                onClick={() => removeMember(m.id)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           );
                         })}
@@ -379,58 +510,61 @@ export default function TrainingGroupsPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
-                  <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <Dumbbell className="h-4.5 w-4.5 text-primary" />
-                        Rutina del Grupo
-                      </CardTitle>
-                    </div>
+                <Card className="border border-border/40 bg-card rounded-2xl shadow-sm overflow-hidden">
+                  <CardHeader className="p-4 border-b border-border/40 bg-muted/20">
+                    <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <Dumbbell className="h-4.5 w-4.5 text-primary" />
+                      Rutina del Grupo
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6 p-5">
                     <div className="flex flex-col sm:flex-row gap-4">
-                      <Button variant="outline" className="flex-1 h-auto flex flex-col items-center justify-center gap-3 hover:bg-muted/10 border-border/60 group py-6 rounded-xl" onClick={() => setShowInlineRoutine(!showInlineRoutine)}>
+                      <Button variant="outline" className="flex-1 h-auto flex flex-col items-center justify-center gap-3 hover:bg-muted/10 border-border/50 bg-secondary/15 group py-6 rounded-2xl transition-all duration-200 hover:scale-[1.01]" onClick={() => setShowInlineRoutine(!showInlineRoutine)}>
                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center transition-transform">
                           <Eye className="h-5 w-5 text-primary" />
                         </div>
-                        <span className="text-xs font-semibold text-foreground text-center leading-tight">Ver rutina del grupo</span>
+                        <span className="text-xs font-bold text-foreground text-center leading-tight">Vista Previa de Rutina</span>
                       </Button>
 
-                      <Button variant="outline" className="flex-1 h-auto flex flex-col items-center justify-center gap-3 hover:bg-muted/10 border-border/60 group py-6 rounded-xl" onClick={() => navigate(`/trainer/routines/group/${selectedGroupId}`)}>
+                      <Button variant="outline" className="flex-1 h-auto flex flex-col items-center justify-center gap-3 hover:bg-muted/10 border-border/50 bg-secondary/15 group py-6 rounded-2xl transition-all duration-200 hover:scale-[1.01]" onClick={() => navigate(`/trainer/routines/group/${selectedGroupId}`)}>
                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center transition-transform">
                           <Edit3 className="h-5 w-5 text-primary" />
                         </div>
-                        <span className="text-xs font-semibold text-foreground text-center leading-tight">Editar rutina del grupo</span>
+                        <span className="text-xs font-bold text-foreground text-center leading-tight">Configurar Ejercicios</span>
                       </Button>
                     </div>
 
                     {showInlineRoutine && (
-                      <div className="pt-5 border-t border-border animate-in fade-in slide-in-from-top-2">
+                      <div className="pt-5 border-t border-border/40 animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center justify-between mb-4">
-                           <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider">Vista previa de la rutina</h3>
+                           <h3 className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Ejercicios por Día</h3>
                         </div>
                         {exercises.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-4 bg-muted/30 border border-dashed rounded-lg">Sin ejercicios asignados al grupo</p>
+                          <div className="text-center py-8 space-y-2 border border-dashed rounded-xl bg-secondary/10 border-border/50">
+                            <Dumbbell className="h-6 w-6 mx-auto text-muted-foreground/35" />
+                            <p className="text-xs text-muted-foreground font-semibold">El grupo no tiene ejercicios cargados</p>
+                          </div>
                         ) : (
-                          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1 hide-scrollbar">
                             {DAYS.map((day) => {
                               const dayExs = exercises.filter((e) => e.day === day);
                               if (dayExs.length === 0) return null;
                               return (
                                 <div key={day} className="space-y-2">
-                                  <Badge variant="outline" className="mb-1 border-primary/20 bg-primary/5 text-primary text-[9px] font-bold px-2 py-0.5 rounded-md">{day}</Badge>
-                                  {dayExs.map((ex) => (
-                                    <div key={ex.id} className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border/50">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-xs text-foreground">{ex.name}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                                          {ex.body_part && <span className="text-primary font-semibold">{ex.body_part} · </span>}
-                                          {ex.sets} × {ex.is_to_failure ? <span className="text-amber-500 font-semibold">Al Fallo</span> : ex.reps}
-                                        </p>
+                                  <Badge variant="outline" className="mb-1 border-primary/20 bg-primary/5 text-primary text-[8.5px] font-bold px-2 py-0.5 rounded">{day}</Badge>
+                                  <div className="space-y-1.5">
+                                    {dayExs.map((ex) => (
+                                      <div key={ex.id} className="flex items-center gap-2 p-3 rounded-xl bg-secondary/15 border border-border/30">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-bold text-xs text-foreground truncate">{ex.name}</p>
+                                          <p className="text-[10px] text-muted-foreground mt-0.5 font-semibold">
+                                            {ex.body_part && <span className="text-primary font-bold">{ex.body_part} · </span>}
+                                            {ex.sets} × {ex.is_to_failure ? <span className="text-destructive font-bold">Al Fallo</span> : `${ex.reps} REPS`}
+                                          </p>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
+                                    ))}
+                                  </div>
                                 </div>
                               );
                             })}

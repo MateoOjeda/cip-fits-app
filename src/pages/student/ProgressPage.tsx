@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Target, Zap, Weight, TrendingUp, Dumbbell, Loader2, ClipboardList } from "lucide-react";
 import { useStudentSurveys } from "@/hooks/useStudentSurveys";
 import { useNavigate } from "react-router-dom";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 interface Exercise {
   id: string;
@@ -47,23 +48,24 @@ export default function ProgressPage() {
     setLoading(true);
 
     try {
-      // Fetch Exercises
       const qEx = query(collection(db, "exercises"), where("student_id", "==", user.uid));
-      const snapEx = await getDocs(qEx);
-      const exData = snapEx.docs.map(d => ({ id: d.id, ...d.data() } as Exercise));
-
-      // Fetch Profile
-      const profSnap = await getDoc(doc(db, "profiles", user.uid));
-      
-      // Fetch Plan Levels
+      const profileRef = doc(db, "profiles", user.uid);
       const qLevels = query(
         collection(db, "plan_levels"), 
         where("student_id", "==", user.uid), 
         where("unlocked", "==", true)
       );
-      const snapLevels = await getDocs(qLevels);
 
+      // Fetch all documents in parallel
+      const [snapEx, profSnap, snapLevels] = await Promise.all([
+        getDocs(qEx),
+        getDoc(profileRef),
+        getDocs(qLevels)
+      ]);
+
+      const exData = snapEx.docs.map(d => ({ id: d.id, ...d.data() } as Exercise));
       setExercises(exData);
+      
       if (profSnap.exists()) {
         setProfile(profSnap.data() as Profile);
       }
@@ -84,8 +86,12 @@ export default function ProgressPage() {
 
   if (isLoadingAll) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-muted animate-pulse rounded-lg" />
+          <div className="h-4 w-72 bg-muted animate-pulse rounded-lg" />
+        </div>
+        <LoadingSkeleton type="details" />
       </div>
     );
   }

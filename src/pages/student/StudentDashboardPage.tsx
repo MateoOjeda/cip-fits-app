@@ -6,6 +6,8 @@ import { doc, deleteDoc } from "firebase/firestore";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
 import { useStudentSurveys } from "@/hooks/useStudentSurveys";
 import { Card, CardContent } from "@/components/ui/card";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
@@ -107,8 +109,8 @@ export default function StudentDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <LoadingSkeleton type="details" />
       </div>
     );
   }
@@ -429,10 +431,12 @@ export default function StudentDashboardPage() {
         </div>
 
         {notifications.length === 0 ? (
-          <div className="py-8 text-center border border-dashed border-border rounded-xl bg-card/30">
-            <Bell className="h-6 w-6 mx-auto text-muted-foreground/45 mb-1.5" />
-            <p className="text-xs text-muted-foreground font-medium">Sin novedades por ahora</p>
-          </div>
+          <EmptyState
+            type="empty"
+            title="Sin novedades por ahora"
+            description="No se han registrado modificaciones o actualizaciones recientes de tu entrenador."
+            className="py-8"
+          />
         ) : (
           <div className="space-y-2">
             {notifications.map((change) => {

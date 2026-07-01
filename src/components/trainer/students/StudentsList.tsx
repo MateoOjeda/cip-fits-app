@@ -1,10 +1,13 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PremiumCard, PremiumCardHeader, PremiumCardTitle, PremiumCardContent } from "@/components/ui/premium-card";
 import { Button } from "@/components/ui/button";
-import { Users, Loader2, Plus, UserMinus } from "lucide-react";
+import { Users, Loader2, UserMinus } from "lucide-react";
 import { StudentCard } from "@/components/trainer/StudentCard";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DataToolbar } from "@/components/ui/data-toolbar";
 import type { LinkedStudent } from "@/services/alumnos";
 
 interface StudentsListProps {
@@ -28,42 +31,47 @@ export function StudentsList({
   onCreateClick,
   itemVariants
 }: StudentsListProps) {
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem("trainer_students_search") || "");
+
+  useEffect(() => {
+    localStorage.setItem("trainer_students_search", searchTerm);
+  }, [searchTerm]);
+
+  const filteredStudents = students.filter(student =>
+    student.display_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <motion.div variants={itemVariants}>
-      <Card className="border border-border/50 bg-card shadow-sm rounded-xl overflow-hidden">
-        <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
-          <div className="flex justify-between items-center w-full">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                <Users className="h-4.5 w-4.5" />
-              </div>
-              <CardTitle className="text-sm font-bold text-foreground">
-                Alumnos ({students.length})
-              </CardTitle>
-            </div>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="h-8 px-2 text-primary hover:bg-primary/10 transition-colors rounded-lg text-xs font-semibold" 
-              onClick={onCreateClick}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" /> Nuevo
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-3 overflow-y-auto max-h-[45vh] hide-scrollbar">
+      <PremiumCard className="overflow-hidden">
+        <PremiumCardHeader className="p-0 border-none bg-transparent">
+          <DataToolbar
+            searchPlaceholder="Buscar alumno activo..."
+            searchValue={searchTerm}
+            onSearchChange={setSearchTerm}
+            onSearchClear={() => setSearchTerm("")}
+            primaryActionText="Nuevo Alumno"
+            onPrimaryAction={onCreateClick}
+            className="border-none shadow-none mb-0 bg-transparent rounded-none p-4 pb-2"
+          />
+        </PremiumCardHeader>
+        
+        <PremiumCardContent className="p-4 pt-1 overflow-y-auto max-h-[45vh] hide-scrollbar">
           {isLoading ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            </div>
-          ) : students.length === 0 ? (
-            <div className="text-center py-6">
-              <Users className="h-7 w-7 mx-auto text-muted-foreground/60 mb-2" />
-              <p className="text-xs text-muted-foreground font-medium">Sin alumnos vinculados</p>
-            </div>
+            <LoadingSkeleton type="list" count={4} />
+          ) : filteredStudents.length === 0 ? (
+            <EmptyState
+              type={searchTerm ? "no-results" : "empty"}
+              title={searchTerm ? "Sin coincidencias" : "Sin alumnos"}
+              description={
+                searchTerm 
+                  ? `No se encontraron alumnos activos que coincidan con "${searchTerm}".`
+                  : "Aún no tienes alumnos vinculados en tu cuenta de entrenador."
+              }
+            />
           ) : (
             <div className="space-y-1">
-              {students.map((student) => (
+              {filteredStudents.map((student) => (
                 <StudentCard
                   key={student.user_id}
                   name={student.display_name}
@@ -74,22 +82,23 @@ export function StudentsList({
                   size="sm"
                   subtitle={
                     <div className="flex gap-1.5 items-center mt-1 flex-wrap">
-                      <Badge variant="outline" className={cn(
-                        "border-none shadow-none text-[9px] font-bold px-1.5 py-0.5 rounded-md",
-                        student.paymentStatus === "pagado" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                      )}>
-                        {student.paymentStatus === "pagado" ? "✓" : "⏳"} {student.paymentStatus === "pagado" ? "Pagado" : "Pendiente"}
-                      </Badge>
+                      <StatusBadge
+                        status={student.paymentStatus === "pagado" ? "pagado" : "pendiente"}
+                        label={student.paymentStatus === "pagado" ? "✓ Pagado" : "⏳ Pendiente"}
+                      />
                       {student.groupName && (
-                        <Badge className="border-none shadow-none bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-                          {student.groupName}
-                        </Badge>
+                        <StatusBadge
+                          status="default"
+                          label={student.groupName}
+                          className="bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                        />
                       )}
                     </div>
                   }
                   rightContent={
                     <Button
-                      variant="ghost" size="icon"
+                      variant="ghost" 
+                      size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg group/btn"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -105,13 +114,13 @@ export function StudentsList({
                       )}
                     </Button>
                   }
-                  className="mb-1"
+                  className="mb-1 rounded-xl transition-all duration-200 hover:scale-[1.01]"
                 />
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </PremiumCardContent>
+      </PremiumCard>
     </motion.div>
   );
 }

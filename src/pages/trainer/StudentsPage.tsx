@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useStudentsManager } from "@/hooks/useStudentsManager";
 import { toast } from "sonner";
@@ -10,7 +10,9 @@ import { Loader2, Users, UserPlus, CreditCard, Plus, FileText, Dumbbell, Clipboa
 import type { LinkedStudent } from "@/services/alumnos";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { PremiumCard, PremiumCardContent } from "@/components/ui/premium-card";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 import { StudentsList } from "@/components/trainer/students/StudentsList";
 import { AvailableStudentsList } from "@/components/trainer/students/AvailableStudentsList";
@@ -32,7 +34,15 @@ export default function StudentsPage() {
   } = useStudentsManager();
 
   const navigate = useNavigate();
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => localStorage.getItem("trainer_selected_student_id"));
+
+  useEffect(() => {
+    if (selectedStudentId) {
+      localStorage.setItem("trainer_selected_student_id", selectedStudentId);
+    } else {
+      localStorage.removeItem("trainer_selected_student_id");
+    }
+  }, [selectedStudentId]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -150,41 +160,41 @@ export default function StudentsPage() {
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-primary/20 transition-all transition-ds">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary shrink-0">
+        <PremiumCard className="hover:border-primary/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
               <Users className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Alumnos Vinculados</p>
               <h3 className="text-base font-bold text-foreground mt-0.5">{linkedStudents.length} Activos</h3>
             </div>
-          </CardContent>
-        </Card>
+          </PremiumCardContent>
+        </PremiumCard>
 
-        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-emerald-500/20 transition-all transition-ds">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+        <PremiumCard className="hover:border-emerald-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
               <CreditCard className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Estado de Pagos</p>
               <h3 className="text-base font-bold text-foreground mt-0.5">{paidStudentsCount} de {linkedStudents.length} al día</h3>
             </div>
-          </CardContent>
-        </Card>
+          </PremiumCardContent>
+        </PremiumCard>
 
-        <Card className="border border-border/40 bg-card/60 rounded-xl shadow-sm hover:border-amber-500/20 transition-all transition-ds">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-10 w-10 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+        <PremiumCard className="hover:border-amber-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
               <UserPlus className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Alumnos por Vincular</p>
               <h3 className="text-base font-bold text-foreground mt-0.5">{availableStudents.length} Disponibles</h3>
             </div>
-          </CardContent>
-        </Card>
+          </PremiumCardContent>
+        </PremiumCard>
       </div>
 
       {/* Quick Actions for Trainer */}

@@ -33,7 +33,11 @@ import {
   autoUpdateRoutineCycle,
 } from "@/services/rutinas";
 import { getOrCreateActiveRoutine, linkExercisesToRoutine } from "@/services/routineManager";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PremiumCard, PremiumCardContent, PremiumCardHeader, PremiumCardTitle } from "@/components/ui/premium-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -504,6 +508,47 @@ export default function RoutinesPage() {
         </div>
       </div>
 
+      {/* KPIs superiores de Rutinas */}
+      {(selectedStudent || isGroupMode) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <PremiumCard className="hover:border-primary/20">
+            <PremiumCardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
+                <Dumbbell className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Total Ejercicios</p>
+                <h3 className="text-base font-bold text-foreground mt-0.5">{exercises.length} Cargados</h3>
+              </div>
+            </PremiumCardContent>
+          </PremiumCard>
+
+          <PremiumCard className="hover:border-blue-500/20">
+            <PremiumCardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Ejercicios del {selectedDay}</p>
+                <h3 className="text-base font-bold text-foreground mt-0.5">{exercises.filter(e => e.day === selectedDay).length} Programados</h3>
+              </div>
+            </PremiumCardContent>
+          </PremiumCard>
+
+          <PremiumCard className="hover:border-emerald-500/20">
+            <PremiumCardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                <Users className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Músculos ({selectedDay})</p>
+                <h3 className="text-base font-bold text-foreground mt-0.5 truncate">{combinedBodyPart || "No definidos"}</h3>
+              </div>
+            </PremiumCardContent>
+          </PremiumCard>
+        </div>
+      )}
+
       {!isGroupMode && !selectedStudent ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {students.map((s) => (
@@ -588,17 +633,20 @@ export default function RoutinesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Left: MUSCULAR CONFIG & FORM */}
                       <div className="space-y-6">
-                        <Card className="border border-border/50 bg-muted/20 rounded-xl shadow-sm">
+                        {/* Configuración muscular del día */}
+                        <Card className="border border-border/40 bg-card/60 rounded-2xl shadow-sm overflow-hidden">
+                          <CardHeader className="p-4 border-b border-border/40 bg-muted/20">
+                            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-primary" />
+                              Músculos a Entrenar ({selectedDay})
+                            </CardTitle>
+                          </CardHeader>
                           <CardContent className="p-4 space-y-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                              Músculos {selectedDay}
-                            </p>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Principal</Label>
+                                <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Grupo Principal</Label>
                                 <Select value={currentDayConfig.body_part_1 || "none"} onValueChange={(v) => handleSaveDayConfig("body_part_1", v)}>
-                                  <SelectTrigger className="py-1.5 h-10 border-border/60"><SelectValue placeholder="Primario" /></SelectTrigger>
+                                  <SelectTrigger className="h-10 border-border/50 bg-secondary/15 hover:bg-secondary/25 text-xs"><SelectValue placeholder="Primario" /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">— Ninguno —</SelectItem>
                                     {BODY_PARTS.map((bp) => <SelectItem key={bp} value={bp}>{bp}</SelectItem>)}
@@ -606,9 +654,9 @@ export default function RoutinesPage() {
                                 </Select>
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Secundario</Label>
+                                <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Grupo Secundario</Label>
                                 <Select value={currentDayConfig.body_part_2 || "none"} onValueChange={(v) => handleSaveDayConfig("body_part_2", v)}>
-                                  <SelectTrigger className="py-1.5 h-10 border-border/60"><SelectValue placeholder="Secundario" /></SelectTrigger>
+                                  <SelectTrigger className="h-10 border-border/50 bg-secondary/15 hover:bg-secondary/25 text-xs"><SelectValue placeholder="Secundario" /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">— Ninguno —</SelectItem>
                                     {BODY_PARTS.filter((bp) => bp !== currentDayConfig.body_part_1).map((bp) => (
@@ -621,29 +669,30 @@ export default function RoutinesPage() {
                           </CardContent>
                         </Card>
 
-                        <Card className="border border-border/50 bg-card rounded-xl shadow-sm">
-                          <CardHeader className="p-5 pb-2">
-                            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                              <Users className="h-4.5 w-4.5 text-primary" />
-                              Nuevo Ejercicio
+                        {/* Formulario de Nuevo Ejercicio */}
+                        <Card className="border border-border/40 bg-card/60 rounded-2xl shadow-sm overflow-hidden">
+                          <CardHeader className="p-4 border-b border-border/40 bg-muted/20">
+                            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                              <Dumbbell className="h-4.5 w-4.5 text-primary" />
+                              Configurar Ejercicio
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="p-5 pt-0 space-y-4">
+                          <CardContent className="p-4 space-y-4">
                             <div className="space-y-1.5">
-                              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Ejercicio</Label>
+                              <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Selección de Ejercicio</Label>
                               {availableExercises.length > 0 ? (
                                 <Select value={form.name} onValueChange={(v) => setForm({ ...form, name: v })}>
-                                  <SelectTrigger className="h-10 border-border/60"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                  <SelectTrigger className="h-11 border-border/50 bg-secondary/15 hover:bg-secondary/25 text-xs"><SelectValue placeholder="Seleccionar ejercicio..." /></SelectTrigger>
                                   <SelectContent>
                                     {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
                               ) : (
                                 <Input
-                                  placeholder={currentDayConfig.body_part_1 ? "Escribir nombre..." : "Configura grupo muscular"}
+                                  placeholder={currentDayConfig.body_part_1 ? "Escribir nombre del ejercicio..." : "Primero asigna un grupo muscular arriba"}
                                   value={form.name}
                                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                  className="h-10 border-border/60 text-xs"
+                                  className="h-11 border-border/50 bg-secondary/15 text-xs"
                                   disabled={!currentDayConfig.body_part_1}
                                 />
                               )}
@@ -651,31 +700,31 @@ export default function RoutinesPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Series</Label>
-                                <Input type="number" placeholder="4" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} className="input-premium h-11 border-border/40" />
+                                <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Series</Label>
+                                <Input type="number" placeholder="4" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} className="h-11 border-border/50 bg-secondary/15 text-xs" />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Repeticiones</Label>
+                                <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Repeticiones</Label>
                                 <Input
                                   type={form.isToFailure ? "text" : "number"}
                                   placeholder={form.isToFailure ? "Al Fallo" : "12"}
                                   value={form.isToFailure || form.isPiramide ? "" : form.reps}
                                   onChange={(e) => setForm({ ...form, reps: e.target.value })}
-                                  className="input-premium h-11 border-border/40"
+                                  className="h-11 border-border/50 bg-secondary/15 text-xs"
                                   disabled={form.isToFailure || form.isPiramide}
                                 />
                               </div>
                             </div>
 
-                            <div className="p-4 rounded-2xl bg-secondary/20 border border-border/40 space-y-4">
+                            <div className="p-3.5 rounded-xl bg-secondary/20 border border-border/40 space-y-3.5">
                               <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Tipo de serie</Label>
+                                <Label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Configuraciones Avanzadas</Label>
                               </div>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
+                              <div className="space-y-2.5">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/40 border border-border/30 hover:bg-card/60 transition-all">
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-semibold">Al Fallo</span>
-                                    <span className="text-[10px] text-muted-foreground">Esfuerzo máximo</span>
+                                    <span className="text-xs font-semibold text-foreground">Al Fallo</span>
+                                    <span className="text-[9px] text-muted-foreground">Llevar la serie al límite muscular</span>
                                   </div>
                                   <Switch
                                     checked={form.isToFailure}
@@ -686,12 +735,13 @@ export default function RoutinesPage() {
                                       isDropset: checked ? false : form.isDropset,
                                       isPiramide: checked ? false : form.isPiramide
                                     })}
+                                    className="data-[state=checked]:bg-primary"
                                   />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/40 border border-border/30 hover:bg-card/60 transition-all">
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-semibold">Drop Set</span>
-                                    <span className="text-[10px] text-muted-foreground">Descenso de peso</span>
+                                    <span className="text-xs font-semibold text-foreground">Drop Set</span>
+                                    <span className="text-[9px] text-muted-foreground">Reducir peso tras llegar al fallo</span>
                                   </div>
                                   <Switch
                                     checked={form.isDropset}
@@ -701,12 +751,13 @@ export default function RoutinesPage() {
                                       isToFailure: checked ? false : form.isToFailure,
                                       isPiramide: checked ? false : form.isPiramide
                                     })}
+                                    className="data-[state=checked]:bg-primary"
                                   />
                                 </div>
-                                <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
+                                <div className="flex items-center justify-between p-2 rounded-lg bg-card/40 border border-border/30 hover:bg-card/60 transition-all">
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-semibold">Pirámide</span>
-                                    <span className="text-[10px] text-muted-foreground">Carga progresiva</span>
+                                    <span className="text-xs font-semibold text-foreground">Pirámide</span>
+                                    <span className="text-[9px] text-muted-foreground">Subir peso y bajar repeticiones</span>
                                   </div>
                                   <Switch
                                     checked={form.isPiramide}
@@ -717,62 +768,64 @@ export default function RoutinesPage() {
                                       isToFailure: checked ? false : form.isToFailure,
                                       isDropset: checked ? false : form.isDropset
                                     })}
+                                    className="data-[state=checked]:bg-primary"
                                   />
                                 </div>
                               </div>
                               {form.isPiramide && (
-                                <div className="pt-2 animate-in slide-in-from-top-2">
+                                <div className="pt-1.5 animate-in slide-in-from-top-2">
+                                  <Label className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5 mb-1 block">Esquema de Repeticiones</Label>
                                   <Input
-                                    placeholder="Reps: 12-10-8-10-12"
+                                    placeholder="Ej: 12-10-8-6"
                                     value={form.pyramidReps}
                                     onChange={(e) => setForm({ ...form, pyramidReps: e.target.value })}
-                                    className="text-xs h-9"
+                                    className="text-xs h-9 bg-card/50"
                                   />
                                 </div>
                               )}
                             </div>
 
                             {/* BI SERIE Section */}
-                            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-4">
-                              <div className="flex items-center justify-between p-1">
+                            <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-4">
+                              <div className="flex items-center justify-between">
                                 <div className="flex flex-col">
-                                  <span className="text-xs font-bold text-primary tracking-wider uppercase">Bi Serie</span>
-                                  <span className="text-[10px] text-muted-foreground">Bi-serie vinculada</span>
+                                  <span className="text-xs font-bold text-primary tracking-wider uppercase">Vincular Bi Serie</span>
+                                  <span className="text-[9px] text-muted-foreground">Agregar un ejercicio continuo sin descanso</span>
                                 </div>
                                 <Switch checked={biSerieEnabled} onCheckedChange={(checked) => {
                                   setBiSerieEnabled(checked);
                                   if (!checked) setBiForm({ name: "", reps: "", isToFailure: false, isDropset: false });
-                                }} />
+                                }} className="data-[state=checked]:bg-primary" />
                               </div>
 
                               {biSerieEnabled && (
-                                <div className="space-y-4 pl-3 border-l border-primary/30 animate-in slide-in-from-left-2">
-                                  <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase text-muted-foreground">Ejercicio Complementario</Label>
+                                <div className="space-y-4 pl-3.5 border-l-2 border-primary/30 animate-in slide-in-from-left-2">
+                                  <div className="space-y-1.5">
+                                    <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Ejercicio Complementario</Label>
                                     {availableExercises.length > 0 ? (
                                       <Select value={biForm.name} onValueChange={(v) => setBiForm({ ...biForm, name: v })}>
-                                        <SelectTrigger className="h-10 border-border/60"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
+                                        <SelectTrigger className="h-10 border-border/50 bg-card/60 text-xs"><SelectValue placeholder="Ejercicio..." /></SelectTrigger>
                                         <SelectContent>
                                           {availableExercises.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
                                         </SelectContent>
                                       </Select>
                                     ) : (
-                                      <Input placeholder="Escribir..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="h-10 border-border/60 text-xs" />
+                                      <Input placeholder="Escribir nombre..." value={biForm.name} onChange={(e) => setBiForm({ ...biForm, name: e.target.value })} className="h-10 border-border/50 bg-card/60 text-xs" />
                                     )}
                                   </div>
                                   <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Reps</Label>
-                                      <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="h-10 border-border/60 text-xs" disabled={biForm.isToFailure} />
+                                    <div className="space-y-1.5">
+                                      <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Repeticiones</Label>
+                                      <Input type="number" value={biForm.reps} onChange={(e) => setBiForm({ ...biForm, reps: e.target.value })} className="h-10 border-border/50 bg-card/60 text-xs" disabled={biForm.isToFailure} />
                                     </div>
-                                    <div className="flex flex-col gap-1.5 justify-end pb-1 px-1">
+                                    <div className="flex flex-col gap-2 justify-end pb-1">
                                       <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-semibold text-muted-foreground">Al Fallo</span>
-                                        <Switch checked={biForm.isToFailure} onCheckedChange={(checked) => setBiForm({ ...biForm, isToFailure: checked, reps: checked ? "" : biForm.reps })} className="scale-75 origin-right" />
+                                        <span className="text-[10px] font-semibold text-muted-foreground">Al Fallo</span>
+                                        <Switch checked={biForm.isToFailure} onCheckedChange={(checked) => setBiForm({ ...biForm, isToFailure: checked, reps: checked ? "" : biForm.reps })} className="scale-75 origin-right data-[state=checked]:bg-primary" />
                                       </div>
                                       <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-semibold text-muted-foreground">Drop Set</span>
-                                        <Switch checked={biForm.isDropset} onCheckedChange={(checked) => setBiForm({ ...biForm, isDropset: checked })} className="scale-75 origin-right" />
+                                        <span className="text-[10px] font-semibold text-muted-foreground">Drop Set</span>
+                                        <Switch checked={biForm.isDropset} onCheckedChange={(checked) => setBiForm({ ...biForm, isDropset: checked })} className="scale-75 origin-right data-[state=checked]:bg-primary" />
                                       </div>
                                     </div>
                                   </div>
@@ -780,8 +833,8 @@ export default function RoutinesPage() {
                               )}
                             </div>
 
-                            <Button onClick={handleAdd} className="bg-primary hover:bg-primary/90 text-primary-foreground w-full h-11 rounded-xl font-semibold shadow-sm" disabled={!currentDayConfig.body_part_1}>
-                              <Plus className="h-4 w-4 mr-2" /> Agregar Ejercicio
+                            <Button onClick={handleAdd} className="w-full h-11 rounded-xl font-bold shadow-sm mt-2" disabled={!currentDayConfig.body_part_1}>
+                              <Plus className="h-4.5 w-4.5 mr-1.5" /> Agregar Ejercicio
                             </Button>
                           </CardContent>
                         </Card>
@@ -789,19 +842,26 @@ export default function RoutinesPage() {
 
                       {/* Right: EXERCISE LIST */}
                       <div className="space-y-6">
-                        <Card className="border border-border/50 bg-card rounded-xl shadow-sm overflow-hidden">
-                          <CardHeader className="p-4 border-b border-border/50 bg-muted/40">
+                        <PremiumCard className="overflow-hidden">
+                          <PremiumCardHeader className="p-4 border-b border-border/40 bg-muted/20">
                             <div className="flex items-center justify-between gap-4">
-                              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                                <div className="p-1.5 bg-primary/10 rounded-md">
-                                  <Dumbbell className="h-4.5 w-4.5 text-primary" />
+                              <PremiumCardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                <div className="p-1 bg-primary/10 rounded-md">
+                                  <Dumbbell className="h-4 w-4 text-primary" />
                                 </div>
-                                {selectedDay}
-                                {combinedBodyPart && <Badge variant="outline" className="ml-1 border-primary/20 text-[9px] uppercase font-bold bg-primary/5 text-primary">{combinedBodyPart}</Badge>}
-                              </CardTitle>
+                                Ejercicios del {selectedDay}
+                                {combinedBodyPart && (
+                                  <StatusBadge
+                                    status="activo"
+                                    label={combinedBodyPart}
+                                    className="ml-1.5"
+                                  />
+                                )}
+                              </PremiumCardTitle>
                               {selectedIds.size > 0 && (
                                 <Button
-                                  variant="destructive" size="sm"
+                                  variant="destructive" 
+                                  size="sm"
                                   className="h-8 px-3 rounded-lg text-xs font-semibold"
                                   onClick={() => setShowDeleteConfirm(true)}
                                   disabled={deleting}
@@ -810,30 +870,28 @@ export default function RoutinesPage() {
                                 </Button>
                               )}
                             </div>
-                          </CardHeader>
-                          <CardContent className="p-4 overflow-y-auto max-h-[700px] hide-scrollbar">
+                          </PremiumCardHeader>
+                          <PremiumCardContent className="p-4 overflow-y-auto max-h-[700px] hide-scrollbar">
                             {loadingExercises ? (
-                              <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <Loader2 className="h-7 w-7 animate-spin text-primary/40" />
-                                <p className="text-xs text-muted-foreground font-semibold animate-pulse">Sincronizando sesión...</p>
-                              </div>
+                              <LoadingSkeleton type="list" count={4} />
                             ) : parentExercises.length === 0 ? (
-                              <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 opacity-45">
-                                <Dumbbell className="h-10 w-10 text-muted-foreground/60" />
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">No hay ejercicios cargados</p>
-                              </div>
+                              <EmptyState
+                                type="empty"
+                                title="Sin ejercicios programados"
+                                description="Configura los músculos del día y completa el formulario de la izquierda para añadir tu primer ejercicio."
+                              />
                             ) : (
                               <div className="grid grid-cols-1 gap-3">
                                 {parentExercises.map((ex) => {
                                   const child = childByParent.get(ex.id);
                                   const isSelected = selectedIds.has(ex.id);
                                   return (
-                                    <div key={ex.id} className="group/item">
+                                    <div key={ex.id} className="group/item space-y-1.5">
                                       <div className={cn(
-                                        "flex items-center gap-3 p-3.5 rounded-xl transition-all duration-200 border",
+                                        "flex items-center gap-3.5 p-3.5 rounded-xl transition-all duration-200 border",
                                         isSelected
                                           ? "bg-primary/5 border-primary/30 shadow-sm"
-                                          : "bg-muted/20 border-border/50 hover:bg-muted/40 hover:border-border/60"
+                                          : "bg-secondary/15 border-border/50 hover:bg-secondary/25 hover:border-border/60 hover:scale-[1.01]"
                                       )}>
                                         <Checkbox
                                           checked={isSelected}
@@ -841,30 +899,30 @@ export default function RoutinesPage() {
                                           className="h-4.5 w-4.5 rounded-md border-border/60 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                         />
                                         <div className="flex-1 min-w-0">
-                                          <p className="font-bold text-sm tracking-tight truncate">{ex.name}</p>
-                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[11px] text-muted-foreground font-medium">
-                                            <span className="text-primary/90">{ex.sets || "-"} SERIES</span>
+                                          <p className="font-bold text-xs text-foreground tracking-tight truncate">{ex.name}</p>
+                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-muted-foreground font-semibold">
+                                            <span className="text-primary font-bold">{ex.sets || "-"} SERIES</span>
                                             <span className="opacity-40">·</span>
-                                            <span className={cn(ex.is_to_failure || ex.is_piramide ? "text-destructive" : "text-white/80")}>
+                                            <span className={cn(ex.is_to_failure || ex.is_piramide ? "text-destructive" : "text-foreground/80")}>
                                               {ex.is_piramide && ex.pyramid_reps ? ex.pyramid_reps : ex.is_to_failure ? "AL FALLO" : `${ex.reps} REPS`}
                                             </span>
                                             {ex.is_dropset && (
                                               <>
                                                 <span className="opacity-40">·</span>
-                                                <Badge className="badge-accent-tag py-0 h-4 text-[8px]">DROP SET</Badge>
+                                                <StatusBadge status="dropset" className="h-4 py-0" />
                                               </>
                                             )}
                                             {ex.is_piramide && (
                                               <>
                                                 <span className="opacity-40">·</span>
-                                                <Badge className="badge-info-tag py-0 h-4 text-[8px]">PIRÁMIDE</Badge>
+                                                <StatusBadge status="piramide" className="h-4 py-0" />
                                               </>
                                             )}
                                           </div>
                                         </div>
                                         <Button
                                           variant="ghost" size="icon"
-                                          className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                          className="h-8.5 w-8.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg opacity-0 group-hover/item:opacity-100 transition-all duration-200"
                                           onClick={() => handleRemove(ex.id)}
                                         >
                                           <Trash2 className="h-4 w-4" />
@@ -872,22 +930,25 @@ export default function RoutinesPage() {
                                       </div>
 
                                       {child && (
-                                        <div className="ml-6 mt-1 flex items-center gap-3 p-3 rounded-2xl bg-accent/5 border border-accent/10 shadow-sm animate-in slide-in-from-left-2">
-                                          <div className="w-1.5 h-8 bg-accent/40 rounded-full flex-shrink-0" />
+                                        <div className="ml-7 mt-0.5 flex items-center gap-3.5 p-3 rounded-xl bg-primary/5 border border-primary/10 shadow-sm animate-in slide-in-from-left-2 relative">
+                                          <div className="absolute left-[-16px] top-[-8px] bottom-1/2 w-4 border-l-2 border-b-2 border-primary/20 rounded-bl-lg pointer-events-none" />
                                           <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-xs text-accent uppercase tracking-wide truncate">{child.name}</p>
-                                            <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold">
-                                              <span className="text-accent/80">{child.sets || "-"} SETS</span>
+                                            <div className="flex items-center gap-2">
+                                              <p className="font-bold text-[11px] text-primary uppercase tracking-wide truncate">{child.name}</p>
+                                              <StatusBadge status="global" label="BI SERIE" className="h-3.5 py-0" />
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5 text-[9px] font-bold">
+                                              <span className="text-muted-foreground">{child.sets || "-"} SETS</span>
                                               <span className="text-muted-foreground/40">·</span>
                                               <span className={child.is_to_failure ? "text-destructive" : "text-muted-foreground"}>
                                                 {child.is_to_failure ? "AL FALLO" : `${child.reps} REPS`}
                                               </span>
-                                              {child.is_dropset && <Badge className="bg-accent/20 text-accent border-0 h-3 text-[7px] px-1 ml-1">DS</Badge>}
+                                              {child.is_dropset && <StatusBadge status="dropset" label="DS" className="h-3 py-0 px-1" />}
                                             </div>
                                           </div>
                                           <Button
                                             variant="ghost" size="icon"
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-40 hover:opacity-100 transition-opacity"
+                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md opacity-45 hover:opacity-100 transition-opacity shrink-0"
                                             onClick={() => handleRemove(child.id)}
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -899,8 +960,8 @@ export default function RoutinesPage() {
                                 })}
                               </div>
                             )}
-                          </CardContent>
-                        </Card>
+                          </PremiumCardContent>
+                        </PremiumCard>
                       </div>
                     </div>
                   </TabsContent>

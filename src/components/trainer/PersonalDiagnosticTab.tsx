@@ -11,6 +11,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Moon, Sun, Dumbbell, Briefcase, Sparkles, Loader2, Clock, AlertCircle } from "lucide-react";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface SurveyData {
   hora_dormir: string;
@@ -90,17 +92,16 @@ export default function PersonalDiagnosticTab({ studentId }: Props) {
   }, [studentId]);
 
   if (loading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
+    return <LoadingSkeleton type="results" count={3} />;
   }
 
   if (!data) {
     return (
-      <Card className="card-glass">
-        <CardContent className="py-8 text-center space-y-2">
-          <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">El alumno aún no ha completado la encuesta de Cambio Personal.</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        type="empty"
+        title="Sin diagnóstico de cambio personal"
+        description="El alumno aún no ha completado la encuesta de Cambio Personal."
+      />
     );
   }
 

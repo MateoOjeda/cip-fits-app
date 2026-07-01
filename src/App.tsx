@@ -31,7 +31,17 @@ const StudentMealsPage = lazy(() => import("@/pages/student/StudentMealsPage"));
 const PublicStudentView = lazy(() => import("@/pages/PublicStudentView"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 30, // 30 minutes
+      refetchOnWindowFocus: false, // Avoid refetching on window focus
+      refetchOnMount: true,
+      retry: 2,
+    },
+  },
+});
 
 function RootRedirect() {
   const { user, role, loading } = useAuth();

@@ -1,7 +1,8 @@
 import { useAuth } from "@/hooks/useAuth";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import MealsTab from "@/components/trainer/MealsTab";
 import { useStudentMeals } from "@/hooks/useStudentMeals";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 export default function StudentMealsPage() {
   const { user } = useAuth();
@@ -9,8 +10,12 @@ export default function StudentMealsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-muted animate-pulse rounded-lg" />
+          <div className="h-4 w-72 bg-muted animate-pulse rounded-lg" />
+        </div>
+        <LoadingSkeleton type="list" count={4} />
       </div>
     );
   }

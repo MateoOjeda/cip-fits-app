@@ -14,8 +14,11 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { TimelineCard } from "@/components/ui/timeline-card";
 import { CheckCircle, XCircle, Dumbbell, Loader2, MessageSquare, ChevronDown } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -169,113 +172,97 @@ export default function ExerciseHistoryTab({ studentId }: Props) {
   }, [logs]);
 
   if (loading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
+    return <LoadingSkeleton type="list" count={4} />;
   }
 
   if (sortedDates.length === 0) {
     return (
-      <Card className="card-glass">
-        <CardContent className="py-8 text-center space-y-2">
-          <Dumbbell className="h-8 w-8 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">El alumno aún no ha registrado actividad diaria.</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        type="empty"
+        title="Sin registros de actividad"
+        description="El alumno aún no ha registrado actividad diaria en su entrenamiento."
+      />
     );
   }
-
   return (
-    <div className="space-y-4">
-      {sortedDates.map(dateStr => {
+    <div className="space-y-6 relative pl-4 border-l border-border/40 ml-3">
+      {sortedDates.map((dateStr, idx) => {
         const dayLogs = grouped[dateStr];
         const completedCount = dayLogs.filter(l => l.completed).length;
         const total = dayLogs.length;
         const dateFormatted = format(parseISO(dateStr), "EEEE d 'de' MMMM", { locale: es });
+        const allCompleted = completedCount === total;
 
         return (
-          <Card key={dateStr} className="card-glass">
-            <CardContent className="p-4 space-y-3">
-              {/* Date header */}
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold capitalize">{dateFormatted}</h3>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] gap-1 ${
-                    completedCount === total
-                      ? "border-primary/40 text-primary"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {completedCount}/{total} completados
-                </Badge>
-              </div>
+          <TimelineCard
+            key={dateStr}
+            title={dateFormatted}
+            subtitle={`${completedCount} de ${total} ejercicios completados`}
+            status={allCompleted ? "activo" : "default"}
+            isLast={idx === sortedDates.length - 1}
+          >
+            <div className="space-y-3 mt-3">
+              {dayLogs.map(log => {
+                const setsMatch = log.actual_sets === log.planned_sets;
+                const repsMatch = log.actual_reps === log.planned_reps;
+                const weightMatch = log.actual_weight === log.planned_weight;
 
-              {/* Exercises */}
-              <div className="space-y-2">
-                {dayLogs.map(log => {
-                  const setsMatch = log.actual_sets === log.planned_sets;
-                  const repsMatch = log.actual_reps === log.planned_reps;
-                  const weightMatch = log.actual_weight === log.planned_weight;
-
-                  return (
-                    <div
-                      key={log.id}
-                      className="flex flex-col gap-2 p-3 rounded-lg bg-secondary/30"
-                    >
-                      <div className="flex items-center gap-3">
-                        {log.completed ? (
-                          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive/60 flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{log.exercise_name}</p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                            {/* Planned */}
-                            <span className="text-[10px] text-muted-foreground">
-                              Programado: {log.planned_sets}×{log.planned_reps} · {log.planned_weight}kg
-                            </span>
-                            {/* Actual */}
-                            {(log.actual_sets !== null || log.actual_reps !== null || log.actual_weight !== null) && (
-                              <span className="text-[10px]">
-                                Real:{" "}
-                                <span className={!setsMatch ? "text-warning font-semibold" : "text-primary"}>
-                                  {log.actual_sets ?? "—"}
-                                </span>
-                                ×
-                                <span className={!repsMatch ? "text-warning font-semibold" : "text-primary"}>
-                                  {log.actual_reps ?? "—"}
-                                </span>
-                                {" · "}
-                                <span className={!weightMatch ? "text-warning font-semibold" : "text-primary"}>
-                                  {log.actual_weight ?? "—"}kg
-                                </span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] flex-shrink-0 ${
-                            log.completed ? "border-primary/40 text-primary" : "border-destructive/30 text-destructive"
-                          }`}
-                        >
-                          {log.completed ? "✓ Hecho" : "✗ Faltó"}
-                        </Badge>
-                      </div>
-
-                      {/* Notes */}
-                      {log.notes && (
-                        <div className="flex items-start gap-2 ml-7 p-2 rounded bg-background/50">
-                          <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                          <p className="text-[11px] text-muted-foreground italic">{log.notes}</p>
-                        </div>
+                return (
+                  <div
+                    key={log.id}
+                    className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-secondary/10 border border-border/30"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      {log.completed ? (
+                        <CheckCircle className="h-4.5 w-4.5 text-primary flex-shrink-0" />
+                      ) : (
+                        <XCircle className="h-4.5 w-4.5 text-destructive/60 flex-shrink-0" />
                       )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate">{log.exercise_name}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[10px] text-muted-foreground font-semibold">
+                          {/* Planned */}
+                          <span>
+                            Programado: {log.planned_sets}×{log.planned_reps} · {log.planned_weight}kg
+                          </span>
+                          {/* Actual */}
+                          {(log.actual_sets !== null || log.actual_reps !== null || log.actual_weight !== null) && (
+                            <span className="text-muted-foreground/60">
+                              Real:{" "}
+                              <span className={!setsMatch ? "text-amber-500 font-bold" : "text-primary font-bold"}>
+                                {log.actual_sets ?? "—"}
+                              </span>
+                              ×
+                              <span className={!repsMatch ? "text-amber-500 font-bold" : "text-primary font-bold"}>
+                                {log.actual_reps ?? "—"}
+                              </span>
+                              {" · "}
+                              <span className={!weightMatch ? "text-amber-500 font-bold" : "text-primary font-bold"}>
+                                {log.actual_weight ?? "—"}kg
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={log.completed ? "completado" : "error"}
+                        label={log.completed ? "✓ Hecho" : "✗ Faltó"}
+                        className="scale-90"
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+
+                    {/* Notes */}
+                    {log.notes && (
+                      <div className="flex items-start gap-2 ml-8 p-2.5 rounded-lg bg-card/40 border border-border/30">
+                        <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <p className="text-[10px] text-muted-foreground font-semibold italic leading-relaxed">{log.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </TimelineCard>
         );
       })}
 
@@ -283,14 +270,14 @@ export default function ExerciseHistoryTab({ studentId }: Props) {
       {hasMore && (
         <Button
           variant="outline"
-          className="w-full gap-2"
+          className="w-full h-10 text-xs font-bold rounded-xl border-border/60 hover:bg-muted/10 gap-1.5 mt-2 shadow-sm"
           onClick={loadMore}
           disabled={loadingMore}
         >
           {loadingMore ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4.5 w-4.5" />
           )}
           Cargar más registros
         </Button>

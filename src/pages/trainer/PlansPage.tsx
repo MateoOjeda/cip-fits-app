@@ -13,6 +13,7 @@ import { Loader2, Save, ChevronDown, ChevronUp, DollarSign, Apple, Dumbbell, Tre
 import { toast } from "sonner";
 import { LEVELS, LEVEL_LABELS, formatPrice } from "@/lib/planConstants";
 import { cn } from "@/lib/utils";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 const PLAN_TYPES_CONFIG = [
   { key: "nutricion", label: "Plan de Alimentación", shortLabel: "Alimentación", icon: Apple },
@@ -73,7 +74,19 @@ export default function PlansPage() {
     }
   };
 
-  if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
+          <div className="space-y-2">
+            <div className="h-7 w-48 bg-muted animate-pulse rounded-lg" />
+            <div className="h-4 w-72 bg-muted animate-pulse rounded-lg" />
+          </div>
+        </div>
+        <LoadingSkeleton type="card" count={2} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
@@ -113,24 +126,54 @@ export default function PlansPage() {
                     if (!pl) return null;
                     return (
                       <div key={pl.id} className={cn(
-                        "rounded-xl border p-4 space-y-3 transition-all",
-                        pl.active ? "border-primary/20 bg-primary/5" : "border-border/60 bg-muted/20 opacity-70"
+                        "rounded-2xl border p-4 space-y-4 transition-all duration-200",
+                        pl.active 
+                          ? "border-primary/30 bg-primary/5 shadow-sm" 
+                          : "border-border/50 bg-muted/20 opacity-70"
                       )}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between pb-1 border-b border-border/30">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-foreground">{LEVEL_LABELS[level]}</span>
-                            <Badge variant="outline" className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${pl.active ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" : "bg-muted text-muted-foreground"}`}>{pl.active ? "Activo" : "Inactivo"}</Badge>
+                            <Badge variant="outline" className={cn(
+                              "text-[9px] font-bold px-2 py-0.5 rounded-md border-none",
+                              pl.active ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+                            )}>
+                              {pl.active ? "Activo" : "Inactivo"}
+                            </Badge>
                           </div>
-                          <Switch checked={pl.active} onCheckedChange={() => handleToggleActive(pl.id, pl.active)} />
+                          <Switch checked={pl.active} onCheckedChange={() => handleToggleActive(pl.id, pl.active)} className="data-[state=checked]:bg-primary" />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-primary" />
-                          <Label className="text-xs text-muted-foreground">Precio:</Label>
-                          <Input type="number" value={pl.price} onChange={(e) => updateField(pl.id, "price", parseFloat(e.target.value) || 0)} className="h-8 w-32 text-xs font-semibold bg-muted/40 border-border/50 rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" />
-                          <span className="text-xs font-bold text-foreground">{formatPrice(pl.price)}</span>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Precio de Suscripción</Label>
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                              <Input 
+                                type="number" 
+                                value={pl.price} 
+                                onChange={(e) => updateField(pl.id, "price", parseFloat(e.target.value) || 0)} 
+                                className="pl-9 h-10 text-xs font-semibold bg-secondary/10 border-border/50 rounded-lg focus-visible:ring-primary/20" 
+                              />
+                            </div>
+                          </div>
+                          <div className="pt-5 text-right sm:text-left">
+                            <span className="text-xs text-muted-foreground">Valor mensual: </span>
+                            <span className="text-sm font-bold text-foreground">{formatPrice(pl.price)}</span>
+                          </div>
                         </div>
-                        <Textarea placeholder={`Contenido de ${pt.shortLabel} - ${LEVEL_LABELS[level]}...`} value={pl.content} onChange={(e) => updateField(pl.id, "content", e.target.value)} className="bg-muted/30 border-border/50 min-h-[100px] text-xs rounded-xl" />
-                        <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg text-xs font-semibold" onClick={() => handleSave(pl.id)} disabled={saving === pl.id}>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Contenido del Plan</Label>
+                          <Textarea 
+                            placeholder={`Describe los detalles y alcances de ${pt.shortLabel} - ${LEVEL_LABELS[level]}...`} 
+                            value={pl.content} 
+                            onChange={(e) => updateField(pl.id, "content", e.target.value)} 
+                            className="bg-secondary/10 border-border/50 min-h-[100px] text-xs rounded-xl focus-visible:ring-primary/20 resize-none" 
+                          />
+                        </div>
+
+                        <Button size="sm" variant="outline" className="gap-1.5 h-8.5 rounded-lg text-xs font-semibold hover:bg-muted/10 border-border" onClick={() => handleSave(pl.id)} disabled={saving === pl.id}>
                           {saving === pl.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Guardar Nivel
                         </Button>
                       </div>
@@ -160,27 +203,57 @@ export default function PlansPage() {
             {expandedPlan === "cambios_fisicos" && (
               <CardContent className="space-y-4 p-4">
                 <div className={cn(
-                  "rounded-xl border p-4 space-y-3",
-                  cambioFisico.active ? "border-primary/20 bg-primary/5" : "border-border/60 bg-muted/20 opacity-70"
+                  "rounded-2xl border p-4 space-y-4 transition-all duration-200",
+                  cambioFisico.active 
+                    ? "border-primary/30 bg-primary/5 shadow-sm" 
+                    : "border-border/50 bg-muted/20 opacity-70"
                 )}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-foreground">Estado</span>
+                  <div className="flex items-center justify-between pb-1 border-b border-border/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-foreground">Estado del Plan</span>
+                      <Badge variant="outline" className={cn(
+                        "text-[9px] font-bold px-2 py-0.5 rounded-md border-none",
+                        cambioFisico.active ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+                      )}>
+                        {cambioFisico.active ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </div>
                     <Switch checked={cambioFisico.active} onCheckedChange={async (v) => {
                       setCambioFisico({ ...cambioFisico, active: v });
                       try { await togglePlan({ id: cambioFisico.id, active: v }); } catch { setCambioFisico({ ...cambioFisico, active: !v }); }
-                    }} />
+                    }} className="data-[state=checked]:bg-primary" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-primary" />
-                    <Label className="text-xs text-muted-foreground">Precio:</Label>
-                    <Input type="number" value={cambioFisico.price} onChange={(e) => setCambioFisico({ ...cambioFisico, price: parseFloat(e.target.value) || 0 })} className="h-8 w-32 text-xs font-semibold bg-muted/40 border-border/50 rounded-lg focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0" />
-                    <span className="text-xs font-bold text-foreground">{formatPrice(cambioFisico.price)}</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Precio de Suscripción</Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                        <Input 
+                          type="number" 
+                          value={cambioFisico.price} 
+                          onChange={(e) => setCambioFisico({ ...cambioFisico, price: parseFloat(e.target.value) || 0 })} 
+                          className="pl-9 h-10 text-xs font-semibold bg-secondary/10 border-border/50 rounded-lg focus-visible:ring-primary/20" 
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-5 text-right sm:text-left">
+                      <span className="text-xs text-muted-foreground">Valor mensual: </span>
+                      <span className="text-sm font-bold text-foreground">{formatPrice(cambioFisico.price)}</span>
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Qué incluye el cambio físico</Label>
-                    <Textarea placeholder="Describe qué incluye el plan de cambio físico..." value={cambioFisico.content} onChange={(e) => setCambioFisico({ ...cambioFisico, content: e.target.value })} className="bg-muted/30 border-border/50 min-h-[120px] text-xs mt-1 rounded-xl" />
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Qué incluye el cambio físico</Label>
+                    <Textarea 
+                      placeholder="Describe qué incluye el plan de cambio físico..." 
+                      value={cambioFisico.content} 
+                      onChange={(e) => setCambioFisico({ ...cambioFisico, content: e.target.value })} 
+                      className="bg-secondary/10 border-border/50 min-h-[120px] text-xs rounded-xl focus-visible:ring-primary/20 resize-none" 
+                    />
                   </div>
-                  <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg text-xs font-semibold" onClick={() => handleSave(cambioFisico.id)} disabled={saving === cambioFisico.id}>
+
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8.5 rounded-lg text-xs font-semibold hover:bg-muted/10 border-border" onClick={() => handleSave(cambioFisico.id)} disabled={saving === cambioFisico.id}>
                     {saving === cambioFisico.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Guardar
                   </Button>
                 </div>

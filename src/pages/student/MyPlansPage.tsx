@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import PlanCard from "@/components/student/PlanCard";
 import PlanLevelDetail from "@/components/student/PlanLevelDetail";
 import { PLAN_TYPES } from "@/lib/planConstants";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 interface GlobalPlan {
   id: string;
@@ -128,8 +129,12 @@ export default function MyPlansPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="max-w-4xl mx-auto pb-24 space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-muted animate-pulse rounded-lg" />
+          <div className="h-4 w-72 bg-muted animate-pulse rounded-lg" />
+        </div>
+        <LoadingSkeleton type="card" count={3} />
       </div>
     );
   }

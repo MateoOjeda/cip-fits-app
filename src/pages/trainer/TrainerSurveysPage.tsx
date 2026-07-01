@@ -9,6 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, Plus, Trash2, Users, FileText, CheckCircle, Eye, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,10 +20,18 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PremiumCard, PremiumCardContent, PremiumCardHeader, PremiumCardTitle, PremiumCardFooter } from "@/components/ui/premium-card";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DataToolbar } from "@/components/ui/data-toolbar";
+import { SectionHeader } from "@/components/ui/section-header";
+import { FileText as FileTextIcon } from "lucide-react";
 
 export default function TrainerSurveysPage() {
   const { user } = useAuth();
   const { students, loading: loadingStudents } = useLinkedStudents();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     surveys,
@@ -34,6 +46,8 @@ export default function TrainerSurveysPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [assignSurvey, setAssignSurvey] = useState<CustomSurvey | null>(null);
   const [resultsSurvey, setResultsSurvey] = useState<CustomSurvey | null>(null);
+
+  const [deleteSurveyId, setDeleteSurveyId] = useState<string | null>(null);
 
   // --- Create Survey Form State ---
   const [title, setTitle] = useState("");
@@ -142,12 +156,18 @@ export default function TrainerSurveysPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Seguro de que deseas eliminar esta encuesta?")) return;
+    setDeleteSurveyId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteSurveyId) return;
     try {
-      await deleteSurveyMutation(id);
+      await deleteSurveyMutation(deleteSurveyId);
       toast.success("Encuesta eliminada");
     } catch {
       toast.error("Error al eliminar la encuesta");
+    } finally {
+      setDeleteSurveyId(null);
     }
   };
 
@@ -207,133 +227,223 @@ export default function TrainerSurveysPage() {
     setSelectedResultStudent(null);
   };
 
-  if (loading) {
-    return <div className="flex justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
+  const filteredSurveys = surveys.filter(survey =>
+    survey.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (survey.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="max-w-6xl mx-auto pb-24 space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Encuestas de Seguimiento</h1>
-          <p className="text-sm text-muted-foreground mt-1">Crea formularios personalizados y obtén feedback estructurado de tus alumnos.</p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-1.5 h-10 rounded-xl text-xs font-semibold shadow-sm">
-          <Plus className="h-4 w-4" /> Crear Encuesta
-        </Button>
+      <SectionHeader
+        title="Encuestas de Seguimiento"
+        description="Crea formularios personalizados y obtén feedback estructurado de tus alumnos."
+        actions={
+          <Button onClick={() => setCreateOpen(true)} className="gap-1.5 h-10 rounded-xl text-xs font-semibold shadow-sm">
+            <Plus className="h-4 w-4" /> Crear Encuesta
+          </Button>
+        }
+      />
+
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <PremiumCard className="hover:border-primary/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
+              <FileTextIcon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Total Encuestas</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{surveys.length} Creadas</h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
+
+        <PremiumCard className="hover:border-blue-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+              <StatusBadge status="global" label="Global" className="h-4.5 scale-90" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Encuestas Globales</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{surveys.filter(s => s.is_global).length} Disponibles</h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
+
+        <PremiumCard className="hover:border-emerald-500/20">
+          <PremiumCardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Alumnos Totales</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">{students.length} Activos</h3>
+            </div>
+          </PremiumCardContent>
+        </PremiumCard>
       </div>
 
-      {surveys.length === 0 ? (
-        <Card className="border border-border/50 border-dashed text-center p-12 bg-card rounded-xl">
-          <FileText className="h-10 w-10 mx-auto text-muted-foreground/45 mb-3" />
-          <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Sin encuestas</h3>
-          <p className="text-xs text-muted-foreground mt-1">Todavía no has creado ninguna encuesta para tus alumnos.</p>
-        </Card>
+      <DataToolbar
+        searchPlaceholder="Buscar encuesta por título..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchClear={() => setSearchQuery("")}
+        className="mb-4"
+      />
+
+      {loading ? (
+        <LoadingSkeleton type="card" count={3} />
+      ) : filteredSurveys.length === 0 ? (
+        <EmptyState
+          type={searchQuery ? "no-results" : "empty"}
+          title={searchQuery ? "Sin coincidencias" : "Sin encuestas"}
+          description={
+            searchQuery 
+              ? `No se encontraron encuestas que coincidan con "${searchQuery}".`
+              : "Todavía no has creado ninguna encuesta para tus alumnos."
+          }
+          actionText={searchQuery ? "Limpiar Búsqueda" : "Crear mi primera encuesta"}
+          onAction={searchQuery ? () => setSearchQuery("") : () => setCreateOpen(true)}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {surveys.map(survey => (
-            <Card key={survey.id} className="border border-border/50 bg-card rounded-xl shadow-sm flex flex-col overflow-hidden">
-              <CardHeader className="pb-3 p-4">
-                <CardTitle className="text-sm font-bold text-foreground line-clamp-1" title={survey.title}>{survey.title}</CardTitle>
-                <CardDescription className="text-xs text-muted-foreground line-clamp-2 min-h-[36px]">{survey.description || "Sin descripción"}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 pb-2 px-4">
+          {filteredSurveys.map(survey => (
+            <PremiumCard key={survey.id} className="flex flex-col hover:scale-[1.01]">
+              <PremiumCardHeader className="pb-2 p-4">
+                <PremiumCardTitle className="text-xs font-bold text-foreground line-clamp-1" title={survey.title}>{survey.title}</PremiumCardTitle>
+                <CardDescription className="text-[11px] text-muted-foreground line-clamp-2 min-h-[32px] mt-0.5 leading-relaxed">{survey.description || "Sin descripción descriptiva"}</CardDescription>
+              </PremiumCardHeader>
+              <PremiumCardContent className="flex-1 pb-3 px-4">
                 <div className="flex gap-2 items-center">
-                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-none">
-                    {survey.questions?.length || 0} Preguntas
-                  </Badge>
+                  <StatusBadge status="default" label={`${survey.questions?.length || 0} Preguntas`} />
                   {survey.is_global && (
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[9px] font-bold px-2 py-0.5 rounded-md shadow-none">
-                      Global
-                    </Badge>
+                    <StatusBadge status="global" label="Global" />
                   )}
                 </div>
-              </CardContent>
-              <CardFooter className="pt-2 pb-3 px-4 flex justify-between gap-2">
-                <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8 text-xs font-semibold rounded-lg" onClick={() => openAssignModal(survey)}>
-                  <Users className="h-3.5 w-3.5" /> Asignar
+              </PremiumCardContent>
+              <PremiumCardFooter className="pt-2 pb-3.5 px-4 flex justify-between gap-2">
+                <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8 text-[11px] font-bold rounded-lg border-border" onClick={() => openAssignModal(survey)}>
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" /> Asignar
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8 text-xs font-semibold rounded-lg" onClick={() => openResultsModal(survey)}>
-                  <Eye className="h-3.5 w-3.5" /> Resultados
+                <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8 text-[11px] font-bold rounded-lg border-border" onClick={() => openResultsModal(survey)}>
+                  <Eye className="h-3.5 w-3.5 text-muted-foreground" /> Resultados
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg shrink-0" onClick={() => handleDelete(survey.id)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg shrink-0 transition-colors" onClick={() => handleDelete(survey.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
-              </CardFooter>
-            </Card>
+              </PremiumCardFooter>
+            </PremiumCard>
           ))}
         </div>
       )}
 
       {/* CREATE SURVEY DIALOG */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nueva Encuesta</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border border-border/40 bg-card/95 shadow-xl rounded-2xl">
+          <DialogHeader className="space-y-1.5 pb-4 border-b border-border/40">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <FileText className="h-4.5 w-4.5" />
+              </div>
+              <DialogTitle className="text-base font-bold">Nueva Encuesta de Seguimiento</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Define el título, descripción y preguntas para recopilar feedback de tus alumnos.
+            </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Título de la Encuesta</Label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej: Encuesta Inicial Mensual" />
+              <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Título de la Encuesta</Label>
+              <Input 
+                value={title} 
+                onChange={e => setTitle(e.target.value)} 
+                placeholder="Ej: Encuesta de Hábitos Iniciales" 
+                className="h-11 text-xs border-border/50 bg-secondary/15 hover:bg-secondary/25 focus-visible:ring-primary/20"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Descripción (Opcional)</Label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Instrucciones para tus alumnos..." className="resize-none" />
+              <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Descripción (Opcional)</Label>
+              <Textarea 
+                value={description} 
+                onChange={e => setDescription(e.target.value)} 
+                placeholder="Instrucciones para tus alumnos (ej: Por favor responde con la mayor sinceridad posible)..." 
+                className="resize-none text-xs border-border/50 bg-secondary/15 hover:bg-secondary/25 min-h-[80px]" 
+              />
             </div>
 
             <div className="flex items-center justify-between p-3.5 rounded-xl border border-primary/20 bg-primary/5">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Encuesta Global</Label>
-                <p className="text-[10px] text-muted-foreground">Se asignará automáticamente a todos tus alumnos registrados.</p>
+                <Label className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 animate-pulse text-primary" />
+                  Asignación Global Automática
+                </Label>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Se asignará automáticamente a todos tus alumnos actuales y nuevos que vincules en el futuro.
+                </p>
               </div>
-              <Switch checked={isGlobal} onCheckedChange={setIsGlobal} />
+              <Switch checked={isGlobal} onCheckedChange={setIsGlobal} className="data-[state=checked]:bg-primary" />
             </div>
             
             <div className="space-y-4 mt-6">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">Preguntas</Label>
-                <Button variant="outline" size="sm" onClick={handleAddQuestion} className="gap-1">
+              <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                <Label className="text-sm font-bold text-foreground">Preguntas del Formulario</Label>
+                <Button variant="outline" size="sm" onClick={handleAddQuestion} className="gap-1.5 h-8 text-xs font-semibold rounded-lg border-primary/30 text-primary hover:bg-primary/5">
                   <Plus className="h-3.5 w-3.5" /> Añadir Pregunta
                 </Button>
               </div>
               
               {questions.length === 0 ? (
-                <div className="p-8 text-center border border-dashed rounded-lg bg-secondary/20">
-                  <p className="text-sm text-muted-foreground">Agrega preguntas para comenzar</p>
+                <div className="p-8 text-center border border-dashed rounded-xl bg-secondary/10 border-border/60">
+                  <FileText className="h-7 w-7 mx-auto text-muted-foreground/35 mb-2" />
+                  <p className="text-xs text-muted-foreground font-semibold">No has agregado ninguna pregunta todavía</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Haz clic en "Añadir Pregunta" para comenzar a configurar tu encuesta.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {questions.map((q, idx) => (
-                    <Card key={idx} className="bg-secondary/10 border-border">
-                      <CardContent className="p-4 space-y-3 relative">
-                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setQuestions(questions.filter((_, i) => i !== idx))}>
-                          <Trash2 className="h-3 w-3" />
+                    <Card key={idx} className="bg-card/40 border border-border/40 rounded-xl overflow-hidden shadow-sm relative group/card">
+                      <CardContent className="p-4 space-y-3.5 relative">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors" 
+                          onClick={() => setQuestions(questions.filter((_, i) => i !== idx))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <div className="flex gap-4 items-start pr-8">
-                          <div className="space-y-1.5 flex-1">
-                            <Label className="text-xs text-muted-foreground">Pregunta {idx + 1}</Label>
-                            <Input value={q.question_text} onChange={e => handleUpdateQuestion(idx, "question_text", e.target.value)} placeholder="¿Cuántos días a la semana entrenas?" />
+                        <div className="flex flex-col sm:flex-row gap-4 items-start pr-8">
+                          <div className="space-y-1.5 flex-1 w-full">
+                            <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Enunciado de la Pregunta {idx + 1}</Label>
+                            <Input 
+                              value={q.question_text} 
+                              onChange={e => handleUpdateQuestion(idx, "question_text", e.target.value)} 
+                              placeholder="Ej: ¿Qué alimentos consumes antes de entrenar?" 
+                              className="h-10 text-xs bg-secondary/10"
+                            />
                           </div>
-                          <div className="space-y-1.5 w-[160px]">
-                            <Label className="text-xs text-muted-foreground">Tipo</Label>
+                          <div className="space-y-1.5 w-full sm:w-[160px]">
+                            <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Tipo de Respuesta</Label>
                             <Select value={q.question_type} onValueChange={v => handleUpdateQuestion(idx, "question_type", v)}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="text">Texto Libre</SelectItem>
-                                <SelectItem value="multiple_choice">Opciones</SelectItem>
+                                <SelectItem value="multiple_choice">Opción Múltiple</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                         </div>
                         {q.question_type === "multiple_choice" && (
-                          <div className="pt-2 pl-2 border-l border-primary/30 space-y-2">
-                            <Label className="text-xs text-muted-foreground">Opciones (separadas por coma)</Label>
+                          <div className="pt-2 pl-3 border-l-2 border-primary/30 space-y-1.5 animate-in slide-in-from-left-2">
+                            <Label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-0.5">Opciones de Respuesta</Label>
                             <Input 
                               value={q.options ? q.options.join(", ") : ""} 
                               onChange={e => handleUpdateQuestion(idx, "options", e.target.value.split(",").map(s => s.trim()).filter(Boolean))} 
-                              placeholder="1 día, 2 días, 3 días..." 
+                              placeholder="Ej: Sí, No, A veces (separadas por comas)" 
+                              className="h-9 text-xs bg-secondary/10"
                             />
+                            <p className="text-[9px] text-muted-foreground ml-0.5">Escribe las opciones que el alumno podrá elegir separadas por una coma.</p>
                           </div>
                         )}
                       </CardContent>
@@ -343,10 +453,10 @@ export default function TrainerSurveysPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateSubmit} disabled={creating}>
-              {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          <DialogFooter className="pt-4 border-t border-border/40 flex items-center justify-end gap-2">
+            <Button variant="ghost" className="h-10 text-xs rounded-xl hover:bg-muted/15 font-semibold text-muted-foreground" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateSubmit} disabled={creating} className="h-10 text-xs rounded-xl font-bold shadow-sm">
+              {creating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
               Guardar Encuesta
             </Button>
           </DialogFooter>
@@ -355,42 +465,60 @@ export default function TrainerSurveysPage() {
 
       {/* ASSIGN SURVEY DIALOG */}
       <Dialog open={!!assignSurvey} onOpenChange={(v) => !v && setAssignSurvey(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Asignar: {assignSurvey?.title}</DialogTitle>
+        <DialogContent className="max-w-md border border-border/40 bg-card/95 shadow-xl rounded-2xl">
+          <DialogHeader className="pb-3 border-b border-border/40">
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Users className="h-4.5 w-4.5 text-primary" />
+              Asignar: {assignSurvey?.title}
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             {students.length > 0 && (
-              <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="text-xs font-bold uppercase text-primary tracking-wider">Asignar a todos</div>
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-primary/5 border border-primary/20 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-primary">Asignar a todos los alumnos</div>
                 <Switch 
                   checked={assignedStudentIds.length === students.length && students.length > 0} 
                   onCheckedChange={handleAssignToAll}
                   disabled={assigning}
+                  className="data-[state=checked]:bg-primary"
                 />
               </div>
             )}
             
             {students.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center">No tienes alumnos vinculados.</p>
+              <div className="text-center py-6">
+                <Users className="h-7 w-7 mx-auto text-muted-foreground/35 mb-2" />
+                <p className="text-xs text-muted-foreground font-semibold">No tienes alumnos vinculados</p>
+              </div>
             ) : (
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1 select-none hide-scrollbar">
                 {students.map(student => {
                   const isAssigned = assignedStudentIds.includes(student.user_id);
                   const isProcessing = assigningStudentId === student.user_id;
-
+ 
                   return (
-                    <div key={student.user_id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-secondary/15 transition-opacity" style={{ opacity: isProcessing ? 0.6 : 1 }}>
-                      <div className="flex-1 font-medium text-xs flex items-center gap-2">
-                        {student.display_name}
-                        {isProcessing && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    <div key={student.user_id} className={cn(
+                      "flex items-center justify-between p-3 rounded-xl border border-border/40 bg-secondary/15 hover:bg-secondary/25 transition-all duration-200",
+                      isProcessing && "opacity-60"
+                    )}>
+                      <div className="flex-1 text-xs font-semibold flex items-center gap-2.5">
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-[10px] shrink-0">
+                          {student.display_name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <span className="truncate">{student.display_name}</span>
+                        {isProcessing && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isAssigned && !isProcessing && <Badge variant="outline" className="text-[9px] font-bold bg-green-500/10 text-green-700 border-green-500/20 px-2 py-0.5 rounded-md shadow-none">Asignado</Badge>}
+                      <div className="flex items-center gap-3">
+                        {isAssigned && !isProcessing && (
+                          <Badge variant="outline" className="border-none shadow-none text-[8.5px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded">
+                            Asignado
+                          </Badge>
+                        )}
                         <Switch 
                           checked={isAssigned} 
                           onCheckedChange={(c) => handleToggleAssign(student.user_id, isAssigned)} 
                           disabled={isProcessing}
+                          className="data-[state=checked]:bg-primary"
                         />
                       </div>
                     </div>
@@ -404,42 +532,60 @@ export default function TrainerSurveysPage() {
 
       {/* RESULTS DIALOG */}
       <Dialog open={!!resultsSurvey} onOpenChange={(v) => !v && setResultsSurvey(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <div className="p-6 border-b border-border bg-card">
-            <DialogTitle>Resultados: {resultsSurvey?.title}</DialogTitle>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 border border-border/40 bg-card/95 shadow-xl rounded-2xl">
+          <div className="p-5 border-b border-border/40 bg-muted/20 flex-shrink-0 flex items-center justify-between">
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <FileText className="h-4.5 w-4.5 text-primary" />
+              Resultados: {resultsSurvey?.title}
+            </DialogTitle>
           </div>
           {loadingResults ? (
-             <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+             <div className="p-6 flex-1 overflow-hidden"><LoadingSkeleton type="results" count={3} /></div>
           ) : (
             <div className="flex flex-1 overflow-hidden min-h-[500px]">
               {/* Sidebar filter */}
-              <div className="w-[250px] border-r border-border bg-card/50 flex flex-col hidden sm:flex">
-                <div className="p-3 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <div className="w-[240px] border-r border-border/40 bg-secondary/15 flex flex-col hidden sm:flex shrink-0">
+                <div className="p-3.5 border-b border-border/40 text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/10">
                   Alumnos Asignados
                 </div>
-                <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                <div className="overflow-y-auto flex-1 p-2 space-y-1 hide-scrollbar">
                   {currentAssignments.length === 0 ? (
-                    <p className="text-xs text-muted-foreground p-2">Sin asignaciones aún.</p>
+                    <p className="text-[10px] text-muted-foreground p-3 italic">Sin asignaciones aún.</p>
                   ) : currentAssignments.map(a => (
                     <button 
                       key={a.id} 
+                      type="button"
                       onClick={() => setSelectedResultStudent(a.student_id)}
-                      className={`w-full text-left p-2.5 rounded-lg text-xs transition-colors flex items-center justify-between ${selectedResultStudent === a.student_id ? "bg-primary/10 font-bold text-primary" : "hover:bg-secondary/50 text-muted-foreground font-semibold"}`}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs transition-all duration-200 flex items-center justify-between",
+                        selectedResultStudent === a.student_id 
+                          ? "bg-primary/10 font-bold text-primary shadow-sm" 
+                          : "hover:bg-secondary/25 text-muted-foreground hover:text-foreground font-semibold"
+                      )}
                     >
-                      <span className="truncate">{a.student?.display_name || "Alumno"}</span>
-                      {a.completed ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> : <AlertCircle className="h-3.5 w-3.5 text-amber-500 opacity-70" />}
+                      <span className="truncate pr-2">{a.student?.display_name || "Alumno"}</span>
+                      {a.completed 
+                        ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> 
+                        : <AlertCircle className="h-3.5 w-3.5 text-amber-500 opacity-60 shrink-0" />
+                      }
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Answers feed */}
-              <div className="flex-1 overflow-y-auto p-6 bg-background">
+              <div className="flex-1 overflow-y-auto p-6 bg-background hide-scrollbar">
                 {!selectedResultStudent ? (
-                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center max-w-sm mx-auto">
-                    <Users className="h-8 w-8 mb-3 opacity-30" />
-                    <p className="text-xs font-semibold uppercase tracking-wider">Respuestas</p>
-                    <p className="text-xs mt-1 text-muted-foreground">Selecciona un alumno para ver sus respuestas</p>
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center max-w-xs mx-auto space-y-3">
+                    <div className="p-3 bg-secondary/25 border border-border/40 rounded-full text-muted-foreground/45">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Ver Respuestas</p>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Selecciona uno de los alumnos asignados en la barra lateral para inspeccionar sus respuestas individuales.
+                      </p>
+                    </div>
                   </div>
                 ) : (() => {
                   const assignment = currentAssignments.find(a => a.student_id === selectedResultStudent);
@@ -447,10 +593,12 @@ export default function TrainerSurveysPage() {
                   
                   if (!assignment.completed) {
                     return (
-                      <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center">
-                        <AlertCircle className="h-8 w-8 mb-3 text-amber-500 opacity-80" />
-                        <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Encuesta Pendiente</p>
-                        <p className="text-xs text-muted-foreground mt-1">El alumno aún no ha completado el formulario.</p>
+                      <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center space-y-3">
+                        <AlertCircle className="h-8 w-8 text-amber-500 animate-pulse" />
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Encuesta Pendiente</p>
+                          <p className="text-[10px] text-muted-foreground">El alumno aún no ha completado las respuestas de este formulario.</p>
+                        </div>
                       </div>
                     );
                   }
@@ -459,13 +607,13 @@ export default function TrainerSurveysPage() {
                   
                   return (
                     <div className="space-y-6">
-                      <div className="flex items-center gap-3 pb-4 border-b border-border">
-                        <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center font-bold text-primary text-sm">
+                      <div className="flex items-center gap-3.5 pb-4 border-b border-border/40">
+                        <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center font-bold text-primary text-xs shrink-0">
                           {assignment.student?.display_name.substring(0,2).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-foreground">{assignment.student?.display_name}</h3>
-                          <p className="text-[10px] text-muted-foreground">
+                          <h3 className="text-xs font-bold text-foreground">{assignment.student?.display_name}</h3>
+                          <p className="text-[9px] text-muted-foreground mt-0.5">
                             Completado el {new Date(assignment.completed_at).toLocaleDateString()} a las {new Date(assignment.completed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </p>
                         </div>
@@ -475,11 +623,13 @@ export default function TrainerSurveysPage() {
                         {resultsSurvey?.questions?.map((q, i) => {
                           const answer = studentAnswers.find(a => a.question_id === q.id);
                           return (
-                            <div key={q.id} className="p-4 rounded-xl bg-secondary/15 border border-border/50">
-                              <p className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Pregunta {i + 1}</p>
-                              <p className="text-xs font-semibold mb-3 text-foreground">{q.question_text}</p>
-                              <div className="bg-card rounded-lg p-3 text-xs text-foreground/80 border border-border/50 shadow-inner">
-                                {answer ? answer.answer_text : <em className="opacity-50">Sin respuesta</em>}
+                            <div key={q.id} className="p-4 rounded-2xl bg-secondary/15 border border-border/40 space-y-3">
+                              <div className="space-y-0.5">
+                                <p className="text-[8px] font-bold text-primary uppercase tracking-widest">Pregunta {i + 1}</p>
+                                <p className="text-xs font-bold text-foreground leading-snug">{q.question_text}</p>
+                              </div>
+                              <div className="bg-card rounded-xl p-3.5 text-xs text-foreground/85 border border-border/50 shadow-inner leading-relaxed">
+                                {answer ? answer.answer_text : <em className="text-muted-foreground/50 font-medium">Sin respuesta registrada</em>}
                               </div>
                             </div>
                           );
@@ -493,6 +643,29 @@ export default function TrainerSurveysPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* CONFIRM DELETE SURVEY DIALOG */}
+      <AlertDialog open={!!deleteSurveyId} onOpenChange={(open) => !open && setDeleteSurveyId(null)}>
+        <AlertDialogContent className="max-w-md border border-border/40 bg-card/95 shadow-xl rounded-2xl">
+          <AlertDialogHeader className="pb-3 border-b border-border/40">
+            <AlertDialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Eliminar Encuesta
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">
+              ¿Estás seguro de que deseas eliminar esta encuesta? Esta acción es permanente, eliminará todas las asignaciones vinculadas a los alumnos y no se podrá deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-4 border-t border-border/40 flex justify-end gap-2">
+            <AlertDialogCancel className="h-9 px-4 rounded-xl text-xs font-semibold">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-9 px-4 rounded-xl text-xs font-bold shadow-sm">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

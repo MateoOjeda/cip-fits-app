@@ -9,9 +9,9 @@ import {
   setDoc, 
   deleteDoc, 
   updateDoc, 
-  addDoc,
-  writeBatch
+  addDoc
 } from "firebase/firestore";
+import { ChunkedBatch } from "@/lib/chunking";
 import { LEVELS, DEFAULT_PRICES } from "@/lib/planConstants";
 
 export interface GlobalPlan {
@@ -60,7 +60,7 @@ export async function fetchGlobalPlans(trainerId: string): Promise<{ plans: Glob
   }
 
   if (missing.length > 0) {
-    const batch = writeBatch(db);
+    const batch = new ChunkedBatch(db);
     const newPlans: any[] = [];
     missing.forEach(m => {
       const newDocRef = doc(collection(db, "global_plans"));
@@ -95,7 +95,7 @@ export async function updatePlanAssignment(
   planType: string,
   level: string
 ) {
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   let hasWrites = false;
 
   // 1. Fetch existing levels for this plan type

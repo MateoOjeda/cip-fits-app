@@ -11,8 +11,8 @@ import {
   onSnapshot, 
   writeBatch,
   doc,
-  updateDoc
 } from "firebase/firestore";
+import { ChunkedBatch } from "@/lib/chunking";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export default function NotificationsPage() {
     if (unread.length === 0) return;
     
     try {
-      const batch = writeBatch(db);
+      const batch = new ChunkedBatch(db);
       unread.forEach((n) => {
         batch.update(doc(db, "notifications", n.id), { read: true });
       });

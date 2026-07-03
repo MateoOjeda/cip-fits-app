@@ -55,7 +55,7 @@ export const StudentCard = memo(function StudentCard({
           {avatarInitials || (name || "??").slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
-      
+
       <div className="flex-1 min-w-0">
         <p className={cn(
           "font-bold truncate leading-none transition-colors",

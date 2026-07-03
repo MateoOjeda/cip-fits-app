@@ -10,10 +10,10 @@ import {
   deleteDoc, 
   updateDoc, 
   addDoc,
-  writeBatch,
   orderBy,
   limit
 } from "firebase/firestore";
+import { ChunkedBatch } from "@/lib/chunking";
 
 export type TargetType = "ALUMNO" | "GRUPO";
 export type RoutineStatus = "ACTIVA" | "ARCHIVADA";
@@ -87,7 +87,7 @@ export async function archiveActiveRoutine(
   const snap = await getDocs(q);
   if (snap.empty) return;
 
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   snap.docs.forEach(d => batch.update(d.ref, { status: "ARCHIVADA" }));
   await batch.commit();
 }
@@ -168,7 +168,7 @@ export async function assignGroupRoutineToStudent(
     getDocs(qLink)
   ]);
 
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   let hasWrites = false;
 
   // 1. Archive ANY current active individual routine for this student
@@ -235,7 +235,7 @@ export async function linkExercisesToRoutine(
   );
   
   const snap = await getDocs(q);
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   snap.docs.forEach(d => batch.update(d.ref, { routine_id: routineId }));
   await batch.commit();
 }

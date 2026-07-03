@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -6,14 +6,12 @@ import {
   collection, 
   query, 
   where, 
-  getDocs, 
   doc, 
   getDoc,
   setDoc,
   onSnapshot,
   orderBy,
   limit,
-  Timestamp
 } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,39 +57,19 @@ export default function StudentFeedPage() {
   const [loading, setLoading] = useState(true);
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
 
-  const fetchChanges = useCallback(async () => {
+  // Fetch lastReadAt once on mount
+  useEffect(() => {
     if (!user) return;
-    setLoading(true);
-
-    try {
-      // Fetch Changes
-      const qChanges = query(
-        collection(db, "trainer_changes"),
-        where("student_id", "==", user.uid),
-        orderBy("created_at", "desc"),
-        limit(50)
-      );
-      const snapChanges = await getDocs(qChanges);
-      const changesData = snapChanges.docs.map(d => ({ id: d.id, ...d.data() } as TrainerChange));
-
-      // Fetch Reading state
-      const readingSnap = await getDoc(doc(db, "change_readings", user.uid));
-      const readingData = readingSnap.exists() ? readingSnap.data() : null;
-
-      setChanges(changesData);
-      setLastReadAt(readingData?.last_read_at || null);
-    } catch (err) {
-      console.error("Error fetching changes:", err);
-    } finally {
-      setLoading(false);
-    }
+    getDoc(doc(db, "change_readings", user.uid))
+      .then((snap) => {
+        if (snap.exists()) {
+          setLastReadAt(snap.data().last_read_at || null);
+        }
+      })
+      .catch((err) => console.error("Error fetching read state:", err));
   }, [user]);
 
-  useEffect(() => {
-    fetchChanges();
-  }, [fetchChanges]);
-
-  // Real-time subscription with onSnapshot
+  // Real-time subscription with onSnapshot (handles initial load + updates)
   useEffect(() => {
     if (!user) return;
     
@@ -105,6 +83,10 @@ export default function StudentFeedPage() {
     const unsubscribe = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as TrainerChange));
       setChanges(data);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error in changes snapshot:", err);
+      setLoading(false);
     });
 
     return () => unsubscribe();

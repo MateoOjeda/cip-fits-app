@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { 
   collection, 
   query, 
@@ -10,9 +10,9 @@ import {
   deleteDoc, 
   updateDoc, 
   addDoc,
-  writeBatch,
   orderBy
 } from "firebase/firestore";
+import { chunkArray, ChunkedBatch } from "@/lib/chunking";
 
 // Simple in-memory cache to minimize Firestore read operations on static definitions
 const surveyCache = new Map<string, any>();
@@ -21,13 +21,10 @@ const questionsCache = new Map<string, any[]>();
 async function getDocsInChunks(collectionName: string, field: string, values: any[]) {
   if (values.length === 0) return { docs: [] };
   const uniqueValues = Array.from(new Set(values));
-  const chunkSize = 30; // Firestore limits 'in' queries to 30 items
-  const promises = [];
-  
-  for (let i = 0; i < uniqueValues.length; i += chunkSize) {
-    const chunk = uniqueValues.slice(i, i + chunkSize);
-    promises.push(getDocs(query(collection(db, collectionName), where(field, "in", chunk))));
-  }
+  const chunks = chunkArray(uniqueValues, 30);
+  const promises = chunks.map(chunk => 
+    getDocs(query(collection(db, collectionName), where(field, "in", chunk)))
+  );
   
   const snaps = await Promise.all(promises);
   return {
@@ -101,7 +98,7 @@ export async function createSurvey(
   questions: Omit<SurveyQuestion, "id" | "survey_id" | "order_index">[],
   isGlobal: boolean = false
 ) {
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   const surveyRef = doc(collection(db, "custom_surveys"));
   const now = new Date().toISOString();
 
@@ -117,6 +114,7 @@ export async function createSurvey(
     const qRef = doc(collection(db, "survey_questions"));
     batch.set(qRef, {
       survey_id: surveyRef.id,
+      trainer_id: trainerId,
       question_text: q.question_text,
       question_type: q.question_type,
       options: q.options,
@@ -140,19 +138,27 @@ export async function fetchSurveyAssignments(surveyId: string): Promise<SurveyAs
   const profilesSnap = await getDocsInChunks("profiles", "user_id", studentIds);
   const profiles = profilesSnap.docs.map(d => d.data() as any);
     
-  return assignments.map((a) => ({
-    ...a,
-    student: profiles.find(p => p.user_id === a.student_id)
-  }));
+  return assignments.map((a) => {
+    const student = profiles.find(p => p.user_id === a.student_id);
+    if (!student) return null;
+    return {
+      ...a,
+      student
+    };
+  }).filter(Boolean) as SurveyAssignment[];
 }
 
 export async function assignSurveyToStudents(surveyId: string, studentIds: string[]) {
   if (studentIds.length === 0) return;
-  const batch = writeBatch(db);
+  const trainerId = auth.currentUser?.uid;
+  if (!trainerId) throw new Error("No authenticated user");
+  
+  const batch = new ChunkedBatch(db);
   studentIds.forEach(id => {
     const docId = `${surveyId}_${id}`;
     batch.set(doc(db, "survey_assignments", docId), {
       survey_id: surveyId,
+      trainer_id: trainerId,
       student_id: id,
       completed: false,
       completed_at: null,
@@ -184,13 +190,10 @@ export async function deleteSurvey(surveyId: string) {
   // 2. Fetch associated answers for these assignments
   const assignmentIds = aSnap.docs.map(d => d.id);
   if (assignmentIds.length > 0) {
-    // Partition into chunks of 10 to avoid Firestore 'in' limit
-    const answersPromises: Promise<any>[] = [];
-    for (let i = 0; i < assignmentIds.length; i += 10) {
-      const chunk = assignmentIds.slice(i, i + 10);
-      const answersQ = query(collection(db, "survey_answers"), where("assignment_id", "in", chunk));
-      answersPromises.push(getDocs(answersQ));
-    }
+    const chunks = chunkArray(assignmentIds, 30);
+    const answersPromises = chunks.map(chunk => 
+      getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", chunk)))
+    );
     const answersSnaps = await Promise.all(answersPromises);
     answersSnaps.forEach(snap => {
       snap.docs.forEach(d => deleteQueue.push(d.ref));
@@ -204,13 +207,10 @@ export async function deleteSurvey(surveyId: string) {
   // 4. Add the main survey doc reference at the very end to guarantee it's deleted last
   deleteQueue.push(doc(db, "custom_surveys", surveyId));
 
-  // 5. Commit deletes in batches of 500, executing sequentially
-  for (let i = 0; i < deleteQueue.length; i += 500) {
-    const batch = writeBatch(db);
-    const chunk = deleteQueue.slice(i, i + 500);
-    chunk.forEach(ref => batch.delete(ref));
-    await batch.commit();
-  }
+  // 5. Commit deletes automatically chunked by ChunkedBatch
+  const batch = new ChunkedBatch(db);
+  deleteQueue.forEach(ref => batch.delete(ref));
+  await batch.commit();
 }
 
 export async function fetchSurveyAnswers(surveyId: string) {
@@ -222,13 +222,12 @@ export async function fetchSurveyAnswers(surveyId: string) {
   
   const assignmentIds = assignments.map((a: any) => a.id);
   // Partition into chunks to avoid Firebase 'in' limit (30)
-  const answers: any[] = [];
-  for (let i = 0; i < assignmentIds.length; i += 10) {
-    const chunk = assignmentIds.slice(i, i + 10);
-    const ansQ = query(collection(db, "survey_answers"), where("assignment_id", "in", chunk));
-    const ansSnap = await getDocs(ansQ);
-    answers.push(...ansSnap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
-  }
+  const chunks = chunkArray(assignmentIds, 30);
+  const answersSnaps = await Promise.all(
+    chunks.map(chunk => getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", chunk))))
+  );
+  
+  const answers = answersSnaps.flatMap(snap => snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
     
   return answers.map((ans: any) => ({
     ...ans,
@@ -257,16 +256,17 @@ export async function fetchStudentPendingSurveys(studentId: string) {
 
   return assignments.map(a => {
     const survey = allSurveys.find(s => s.id === a.survey_id);
-    if (survey) {
-      survey.questions = allQuestions
-        .filter(q => q.survey_id === survey.id)
-        .sort((x, y) => x.order_index - y.order_index);
-    }
+    if (!survey) return null;
+    
+    survey.questions = allQuestions
+      .filter(q => q.survey_id === survey.id)
+      .sort((x, y) => x.order_index - y.order_index);
+      
     return {
       ...a,
       survey
     };
-  });
+  }).filter(Boolean);
 }
 
 export async function fetchSurveyWithQuestions(surveyId: string) {
@@ -284,12 +284,16 @@ export async function fetchSurveyWithQuestions(surveyId: string) {
 }
 
 export async function submitSurveyAnswers(assignmentId: string, answers: { question_id: string, answer_text: string }[]) {
-  const batch = writeBatch(db);
+  const studentId = auth.currentUser?.uid;
+  if (!studentId) throw new Error("No authenticated user");
+  
+  const batch = new ChunkedBatch(db);
   
   answers.forEach(a => {
     const ansRef = doc(collection(db, "survey_answers"));
     batch.set(ansRef, {
       assignment_id: assignmentId,
+      student_id: studentId,
       question_id: a.question_id,
       answer_text: a.answer_text,
       created_at: new Date().toISOString()
@@ -298,6 +302,7 @@ export async function submitSurveyAnswers(assignmentId: string, answers: { quest
   
   batch.update(doc(db, "survey_assignments", assignmentId), { 
     completed: true, 
+    status: "completada",
     completed_at: new Date().toISOString() 
   });
     

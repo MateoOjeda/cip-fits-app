@@ -65,14 +65,14 @@ export function TakeSurveyDialog({ assignmentId, surveyId, open, onOpenChange, o
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isLoading ? "Cargando..." : survey?.title}</DialogTitle>
-          {survey?.description && <p className="text-sm text-muted-foreground mt-2">{survey.description}</p>}
+          {survey?.description && <p className="text-sm text-muted-foreground mt-2">{survey?.description}</p>}
         </DialogHeader>
         
         {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : survey?.questions ? (
           <div className="space-y-6 py-4">
-            {survey.questions.map((q, i) => (
+            {survey?.questions?.map((q, i) => (
               <div key={q.id} className="space-y-3 bg-secondary/20 p-4 rounded-xl border border-border">
                 <Label className="text-base break-words">
                   <span className="text-primary font-bold mr-2">{i + 1}.</span> 

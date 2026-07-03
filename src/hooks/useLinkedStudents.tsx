@@ -7,6 +7,7 @@ import {
   where, 
   getDocs 
 } from "firebase/firestore";
+import { chunkArray } from "@/lib/chunking";
 
 export interface LinkedStudentProfile {
   user_id: string;
@@ -38,16 +39,17 @@ export function useLinkedStudents() {
 
       const ids = snapLinks.docs.map(doc => doc.data().student_id);
 
-      // 2. Fetch profiles for those IDs
-      const qProfiles = query(
-        collection(db, "profiles"),
-        where("user_id", "in", ids)
+      // 2. Fetch profiles in chunks of 30 (Firestore 'in' operator limit)
+      const chunks = chunkArray(ids, 30);
+
+      const profilesSnaps = await Promise.all(
+        chunks.map(chunk =>
+          getDocs(query(collection(db, "profiles"), where("user_id", "in", chunk)))
+        )
       );
-      const snapProfiles = await getDocs(qProfiles);
-      
-      const profiles = snapProfiles.docs.map(doc => ({
-        ...doc.data()
-      } as LinkedStudentProfile));
+
+      const profiles = profilesSnaps
+        .flatMap(snap => snap.docs.map(doc => ({ ...doc.data() } as LinkedStudentProfile)));
 
       return profiles;
     },

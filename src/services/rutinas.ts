@@ -9,9 +9,9 @@ import {
   setDoc, 
   deleteDoc, 
   updateDoc, 
-  addDoc,
-  writeBatch
+  addDoc
 } from "firebase/firestore";
+import { ChunkedBatch } from "@/lib/chunking";
 
 export type ExerciseType = "NORMAL" | "DROP_SET" | "PIRAMIDE" | "AL_FALLO" | "BI_SERIE";
 
@@ -151,7 +151,7 @@ export async function removeExercise(exerciseId: string) {
 }
 
 export async function bulkRemoveExercises(ids: string[]) {
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   ids.forEach(id => batch.delete(doc(db, "exercises", id)));
   await batch.commit();
 }
@@ -186,7 +186,7 @@ export async function addBiSerieChild(
 export async function removeBiSerieChild(parentId: string) {
   const q = query(collection(db, "exercises"), where("parent_exercise_id", "==", parentId));
   const snap = await getDocs(q);
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   snap.docs.forEach(d => batch.delete(d.ref));
   await batch.commit();
 }

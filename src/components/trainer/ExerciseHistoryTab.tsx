@@ -22,6 +22,7 @@ import { TimelineCard } from "@/components/ui/timeline-card";
 import { CheckCircle, XCircle, Dumbbell, Loader2, MessageSquare, ChevronDown } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { chunkArray } from "@/lib/chunking";
 
 interface ExerciseLog {
   id: string;
@@ -98,13 +99,14 @@ export default function ExerciseHistoryTab({ studentId }: Props) {
       // If it's a lot, we might need a different approach.
       const exerciseMap = new Map<string, any>();
       
-      // Fetch each exercise individually (or in chunks of 10)
-      for (let i = 0; i < exerciseIds.length; i += 10) {
-        const chunk = exerciseIds.slice(i, i + 10);
-        const qEx = query(collection(db, "exercises"), where("__name__", "in", chunk));
-        const exSnap = await getDocs(qEx);
-        exSnap.docs.forEach(d => exerciseMap.set(d.id, d.data()));
-      }
+      // Fetch each exercise individually (or in chunks of 30)
+      const chunks = chunkArray(exerciseIds, 30);
+      const exSnaps = await Promise.all(
+        chunks.map(chunk => getDocs(query(collection(db, "exercises"), where("__name__", "in", chunk))))
+      );
+      exSnaps.forEach(snap => {
+        snap.docs.forEach(d => exerciseMap.set(d.id, d.data()));
+      });
 
       const enriched: ExerciseLog[] = logData.map((log: any) => {
         const ex = exerciseMap.get(log.exercise_id);

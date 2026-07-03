@@ -21,11 +21,12 @@ const AvatarBadge: React.FC<AvatarBadgeProps> = ({
 }) => {
   const initials = React.useMemo(() => {
     if (avatarInitials) return avatarInitials.substring(0, 2).toUpperCase();
-    const parts = name.split(" ");
-    if (parts.length >= 2) {
+    const safeName = name || "Alumno";
+    const parts = safeName.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0]?.[0] && parts[1]?.[0]) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return safeName.substring(0, 2).toUpperCase();
   }, [name, avatarInitials]);
 
   const sizeClasses = React.useMemo(() => {

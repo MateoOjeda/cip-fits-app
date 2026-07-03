@@ -82,7 +82,7 @@ const App = () => (
               <Route path="/trainer/notifications" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense></ProtectedRoute>} />
               <Route path="/trainer/groups" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><TrainingGroupsPage /></Suspense></ProtectedRoute>} />
               <Route path="/trainer/surveys" element={<ProtectedRoute requiredRole="trainer"><Suspense fallback={<PageLoader />}><TrainerSurveysPage /></Suspense></ProtectedRoute>} />
-              
+
               <Route path="/student/home" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentDashboardPage /></Suspense></ProtectedRoute>} />
               <Route path="/student/feed" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentFeedPage /></Suspense></ProtectedRoute>} />
               <Route path="/student/routines" element={<ProtectedRoute requiredRole="student"><Suspense fallback={<PageLoader />}><StudentRoutinesPage /></Suspense></ProtectedRoute>} />

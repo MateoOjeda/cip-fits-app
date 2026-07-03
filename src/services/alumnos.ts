@@ -10,9 +10,9 @@ import {
   deleteDoc, 
   updateDoc, 
   addDoc,
-  writeBatch,
   limit
 } from "firebase/firestore";
+import { chunkArray, ChunkedBatch } from "@/lib/chunking";
 
 export interface StudentProfile {
   user_id: string;
@@ -49,10 +49,7 @@ export async function fetchLinkedStudents(trainerId: string): Promise<LinkedStud
   const studentIds = links.map((l) => l.student_id);
 
   // Divide array of IDs into chunks of 30 for 'in' operator
-  const chunks: string[][] = [];
-  for (let i = 0; i < studentIds.length; i += 30) {
-    chunks.push(studentIds.slice(i, i + 30));
-  }
+  const chunks = chunkArray(studentIds, 30);
 
   // Fetch profiles, group memberships and the trainer's groups in parallel
   const profilesPromises = chunks.map(chunk => 
@@ -116,10 +113,7 @@ export async function fetchAvailableStudents(trainerId: string): Promise<Availab
   if (studentUserIds.length === 0) return [];
 
   // Fetch profiles in parallel chunks of 30
-  const chunks: string[][] = [];
-  for (let i = 0; i < studentUserIds.length; i += 30) {
-    chunks.push(studentUserIds.slice(i, i + 30));
-  }
+  const chunks = chunkArray(studentUserIds, 30);
 
   const profilePromises = chunks.map(chunk => 
     getDocs(query(collection(db, "profiles"), where("user_id", "in", chunk)))
@@ -143,7 +137,7 @@ export async function linkStudent(trainerId: string, studentId: string) {
 }
 
 export async function unlinkStudent(trainerId: string, studentId: string) {
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
 
   // 1. Unlink from trainer
   const qLink = query(
@@ -230,12 +224,10 @@ export async function deleteStudentPermanently(trainerId: string, studentId: str
     assignmentsSnap.docs.forEach(d => deleteQueue.push(d.ref));
     
     const assignmentIds = assignmentsSnap.docs.map(d => d.id);
-    const answersPromises: Promise<any>[] = [];
-    for (let i = 0; i < assignmentIds.length; i += 30) {
-      const chunk = assignmentIds.slice(i, i + 30);
-      const qAnswers = query(collection(db, "survey_answers"), where("assignment_id", "in", chunk));
-      answersPromises.push(getDocs(qAnswers));
-    }
+    const chunks = chunkArray(assignmentIds, 30);
+    const answersPromises = chunks.map(chunk => 
+      getDocs(query(collection(db, "survey_answers"), where("assignment_id", "in", chunk)))
+    );
     
     const answersSnaps = await Promise.all(answersPromises);
     answersSnaps.forEach(snap => {
@@ -246,13 +238,10 @@ export async function deleteStudentPermanently(trainerId: string, studentId: str
   // Profile doc
   deleteQueue.push(doc(db, "profiles", studentId));
 
-  // Commit deletes in batches of 500
-  for (let i = 0; i < deleteQueue.length; i += 500) {
-    const batch = writeBatch(db);
-    const chunk = deleteQueue.slice(i, i + 500);
-    chunk.forEach(ref => batch.delete(ref));
-    await batch.commit();
-  }
+  // Commit deletes automatically chunked by ChunkedBatch
+  const batch = new ChunkedBatch(db);
+  deleteQueue.forEach(ref => batch.delete(ref));
+  await batch.commit();
 }
 
 
@@ -278,7 +267,7 @@ export async function createStudentProfile(trainerId: string, data: { name: stri
   // Generate a random ID for a "shadow" user if they haven't registered yet
   const studentId = `student_${Math.random().toString(36).substr(2, 9)}`;
   
-  const batch = writeBatch(db);
+  const batch = new ChunkedBatch(db);
   
   // 1. Profile
   const profileRef = doc(db, "profiles", studentId);
